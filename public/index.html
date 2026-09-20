@@ -148,6 +148,7 @@
 </style>
 </head>
 <body>
+<div id="apiStatusDot" title="Idle" style="position:fixed;top:14px;left:14px;width:12px;height:12px;border-radius:50%;background:#2ECC71;z-index:9999;box-shadow:0 0 0 3px rgba(0,0,0,0.08);"></div>
 <div class="app">
   <div class="rail">
     <h1>Keyword Workbench</h1>
@@ -208,34 +209,68 @@ function goStep(n) {
 // function in this file calls sample(...) or sample.json(...) exactly the
 // same way regardless of which backend is actually running underneath. ----------
 let sampleFn = null;
+
+// ---------- Global API activity indicator (top-left dot: green = idle, red = a
+// call is in flight). Wraps whichever backend answers, so every call site --
+// there's no need to touch each one individually -- is covered automatically. ----------
+let apiActiveCount = 0;
+function setApiIndicator(active) {
+  const dot = document.getElementById('apiStatusDot');
+  if (!dot) return;
+  dot.style.background = active ? '#C0392B' : '#2ECC71';
+  dot.title = active ? 'API call in progress' : 'Idle';
+}
+function trackApiCall(fn) {
+  return async (...args) => {
+    apiActiveCount++;
+    setApiIndicator(true);
+    try {
+      return await fn(...args);
+    } finally {
+      apiActiveCount = Math.max(0, apiActiveCount - 1);
+      if (apiActiveCount === 0) setApiIndicator(false);
+    }
+  };
+}
+
 async function getSample() {
   if (sampleFn) return sampleFn;
 
+  let base;
   if (typeof claude !== 'undefined' && claude.use) {
-    sampleFn = await claude.use("sample");
-    return sampleFn;
-  }
-
-  // Self-hosted fallback -- calls our own serverless function, which holds
-  // the Gemini key server-side (see /api/generate.js). Never call Gemini
-  // directly from this file -- the key must never reach the browser.
-  async function callBackend(prompt, opts, wantJson) {
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, json: wantJson, tier: (opts && opts.modelTier) || 'default' })
-    });
-    if (!res.ok) {
-      const err = new Error('AI request failed (' + res.status + ')');
-      err.code = res.status;
-      throw err;
+    base = await claude.use("sample");
+  } else {
+    // Self-hosted fallback -- calls our own serverless function, which holds
+    // the Gemini key server-side (see /api/generate.js). Never call Gemini
+    // directly from this file -- the key must never reach the browser.
+    async function callBackend(prompt, opts, wantJson) {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          json: wantJson,
+          tier: (opts && opts.modelTier) || 'default',
+          maxTokens: opts && opts.maxTokens // optional override for calls that need more room (e.g. many headings)
+        })
+      });
+      if (!res.ok) {
+        const err = new Error('AI request failed (' + res.status + ')');
+        err.code = res.status;
+        throw err;
+      }
+      return res.json();
     }
-    return res.json();
+    const fallback = async (prompt, opts) => callBackend(prompt, opts, false);
+    fallback.json = async (prompt, opts) => callBackend(prompt, opts, true);
+    base = fallback;
   }
 
-  const fallback = async (prompt, opts) => callBackend(prompt, opts, false);
-  fallback.json = async (prompt, opts) => callBackend(prompt, opts, true);
-  sampleFn = fallback;
+  // Wrap both call forms (plain call and .json) with the activity indicator,
+  // regardless of which backend is underneath.
+  const wrapped = trackApiCall(base);
+  wrapped.json = trackApiCall(base.json);
+  sampleFn = wrapped;
   return sampleFn;
 }
 
@@ -1377,7 +1412,13 @@ function parseHeadingLines(rawHeadings) {
 async function runHeadingOptimizePrompt(prompt, resultEl, budget) {
   const sample = await getSample();
   try {
-    let result = await sample.json(prompt, { modelTier: "default" });
+    // Scale the output token allowance to the actual number of headings --
+    // a fixed guess was truncating on longer pages (each heading needs its own
+    // level/text/keyword/instruction object). ~180 tokens per heading is a safe
+    // margin, with a floor so short lists still get plenty of room.
+    const headingCount = parseHeadingLines(STATE.headings).length;
+    const scaledMaxTokens = Math.max(4096, headingCount * 180 + 1000);
+    let result = await sample.json(prompt, { modelTier: "default", maxTokens: scaledMaxTokens });
     // Defensive: handle the model wrapping the array in an object despite instructions
     if (!Array.isArray(result)) {
       result = result.headings || result.result || result.items || Object.values(result).find(v => Array.isArray(v)) || [];
