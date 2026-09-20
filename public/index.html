@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keyword Distribution Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F1F2EE;
+    --panel: #FFFFFF;
+    --ink: #1C1E1B;
+    --ink-soft: #5B5F57;
+    --line: #DCDED7;
+    --primary: #2F5D50;
+    --primary-bg: #E4EDE9;
+    --secondary: #3C4F78;
+    --secondary-bg: #E7EAF2;
+    --tertiary: #8A4A2F;
+    --tertiary-bg: #F3E7DF;
+    --flag: #A6631F;
+    --flag-bg: #FBF0E2;
+    --danger: #9E3B3B;
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181A;
+    --panel: #1E2123;
+    --ink: #ECEDEA;
+    --ink-soft: #9CA096;
+    --line: #33362F;
+    --primary-bg: #1B2B26;
+    --secondary-bg: #1D2433;
+    --tertiary-bg: #2B211B;
+    --flag-bg: #2B2013;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181A; --panel: #1E2123; --ink: #ECEDEA; --ink-soft: #9CA096;
+      --line: #33362F; --primary-bg: #1B2B26; --secondary-bg: #1D2433;
+      --tertiary-bg: #2B211B; --flag-bg: #2B2013;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: 'Inter', sans-serif; line-height: 1.5;
+  }
+  h1, h2, h3, .serif { font-family: 'Source Serif 4', serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+  @media (max-width: 800px) { .app { grid-template-columns: 1fr; } .rail { display: none; } }
+  .rail {
+    background: var(--panel); border-right: 1px solid var(--line);
+    padding: 32px 20px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  .rail h1 { font-size: 17px; margin: 0 0 4px; font-weight: 600; }
+  .rail .sub { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 32px; }
+  .step-item {
+    display: flex; gap: 10px; padding: 10px 8px; border-radius: 6px;
+    font-size: 13.5px; color: var(--ink-soft); margin-bottom: 4px; cursor: default;
+  }
+  .step-item .num {
+    width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--line);
+    display: flex; align-items: center; justify-content: center; font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; margin-top: 1px;
+  }
+  .step-item.active { background: var(--primary-bg); color: var(--ink); font-weight: 500; }
+  .step-item.active .num { background: var(--primary); border-color: var(--primary); color: white; }
+  .step-item.done .num { background: var(--ink-soft); border-color: var(--ink-soft); color: var(--panel); }
+  .step-item.done { color: var(--ink); }
+  .main { padding: 48px 40px; max-width: 760px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 28px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 20px; margin: 0 0 6px; }
+  .card .hint { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 18px; }
+  textarea, input[type=text], input[type=number] {
+    width: 100%; font-family: 'IBM Plex Mono', monospace; font-size: 13px;
+    padding: 12px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--ink); resize: vertical;
+  }
+  input[type=number] { font-family: 'Inter', sans-serif; width: 100px; }
+  label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 6px; }
+  .field { margin-bottom: 16px; }
+  button {
+    font-family: 'Inter', sans-serif; font-weight: 500; font-size: 13.5px;
+    padding: 10px 18px; border-radius: 6px; border: none; cursor: pointer;
+    background: var(--primary); color: white;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary { background: transparent; border: 1px solid var(--line); color: var(--ink); }
+  .tier-block { border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .tier-block.primary { border-left: 3px solid var(--primary); background: var(--primary-bg); }
+  .tier-block.secondary { border-left: 3px solid var(--secondary); background: var(--secondary-bg); }
+  .tier-block.tertiary { border-left: 3px solid var(--tertiary); background: var(--tertiary-bg); }
+  .tier-label { font-size: 11px; text-transform: none; font-weight: 600; margin-bottom: 8px; }
+  .tier-block.primary .tier-label { color: var(--primary); }
+  .tier-block.secondary .tier-label { color: var(--secondary); }
+  .tier-block.tertiary .tier-label { color: var(--tertiary); }
+  .main-kw { font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .variant-chip {
+    display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    padding: 3px 8px; margin: 2px 4px 2px 0;
+  }
+  .flag-box {
+    border: 1px solid var(--flag); background: var(--flag-bg); border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 12px; font-size: 13.5px;
+  }
+  .flag-box .flag-title { color: var(--flag); font-weight: 600; margin-bottom: 6px; font-size: 12.5px; }
+  .charcount { font-size: 11.5px; color: var(--ink-soft); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
+  .charcount.over { color: var(--danger); font-weight: 600; }
+  .loading { display: flex; align-items: center; gap: 10px; color: var(--ink-soft); font-size: 13.5px; padding: 20px 0; }
+  .spinner {
+    width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--primary);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .heading-row { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; }
+  .heading-row .htag {
+    display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; margin-right: 8px;
+  }
+  .heading-row .htext { font-weight: 500; font-size: 14.5px; }
+  .heading-row .instruction { font-size: 12.5px; color: var(--ink-soft); margin-top: 6px; padding-left: 2px; }
+  .heading-row .instruction .kw { font-family: 'IBM Plex Mono', monospace; background: var(--primary-bg); color: var(--primary); padding: 1px 5px; border-radius: 3px; }
+  .budget-strip { display: flex; gap: 12px; margin-bottom: 18px; }
+  .budget-pill {
+    flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; text-align: center;
+  }
+  .budget-pill .n { font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 600; }
+  .budget-pill .l { font-size: 11px; color: var(--ink-soft); }
+  .row2 { display: flex; gap: 16px; }
+  .row2 > div { flex: 1; }
+  .empty-note { color: var(--ink-soft); font-size: 13px; text-align: center; padding: 24px 0; }
+  .hl-primary { background: #C8E6D8; color: #1A4D3A; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
+  .hl-secondary { background: #CBD9F0; color: #1F3866; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
+  .hl-combined { background: #E3D2F5; color: #4A1F72; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
+  .legend-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+  .legend-swatch.hl-primary { background: #4E9E77; }
+  .legend-swatch.hl-secondary { background: #5B7BC4; }
+  .legend-swatch.hl-combined { background: #9457C7; }
+  .option-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; }
+  .option-card:hover { border-color: var(--ink-soft); }
+  .option-card.selected { border-color: var(--primary); border-width: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="rail">
+    <h1>Keyword Workbench</h1>
+    <div class="sub">Distribution &amp; on-page mapping</div>
+    <div id="steps"></div>
+  </div>
+  <div class="main">
+    <div id="step1" class="stepview"></div>
+    <div id="step2" class="stepview" style="display:none"></div>
+    <div id="step3" class="stepview" style="display:none"></div>
+    <div id="step4" class="stepview" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+const STATE = {
+  step: 1,
+  rawKeywords: "",
+  tiers: null,       // {primary:{main,variants}, secondary:{...}, tertiary:{...}, related_pool:[], flags:[]}
+  wordCount: 500,
+  niche: "",
+  meta: null,        // {title, description}
+  headings: "",
+  annotated: null
+};
+
+const STEP_LABELS = [
+  "Paste your keywords",
+  "Confirm tiers & get meta",
+  "Optimize your headings",
+  "Audit your written content"
+];
+
+function renderRail() {
+  const el = document.getElementById('steps');
+  el.innerHTML = STEP_LABELS.map((label, i) => {
+    const n = i + 1;
+    let cls = 'step-item';
+    if (n === STATE.step) cls += ' active';
+    if (n < STATE.step) cls += ' done';
+    return `<div class="${cls}"><div class="num">${n < STATE.step ? '✓' : n}</div><div>${label}</div></div>`;
+  }).join('');
+}
+
+function goStep(n) {
+  STATE.step = n;
+  document.querySelectorAll('.stepview').forEach(v => v.style.display = 'none');
+  document.getElementById('step' + n).style.display = 'block';
+  renderRail();
+  if (n === 1) renderStep1();
+  if (n === 2) renderStep2();
+  if (n === 3) renderStep3();
+  if (n === 4) renderStep4();
+}
+
+// ---------- AI wrapper: uses Claude's sample() inside claude.ai, falls back to
+// our own /api/generate (Gemini, via Vercel) when self-hosted. Every other
+// function in this file calls sample(...) or sample.json(...) exactly the
+// same way regardless of which backend is actually running underneath. ----------
+let sampleFn = null;
+async function getSample() {
+  if (sampleFn) return sampleFn;
+
+  if (typeof claude !== 'undefined' && claude.use) {
+    sampleFn = await claude.use("sample");
+    return sampleFn;
+  }
+
+  // Self-hosted fallback -- calls our own serverless function, which holds
+  // the Gemini key server-side (see /api/generate.js). Never call Gemini
+  // directly from this file -- the key must never reach the browser.
+  async function callBackend(prompt, opts, wantJson) {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, json: wantJson, tier: (opts && opts.modelTier) || 'default' })
+    });
+    if (!res.ok) {
+      const err = new Error('AI request failed (' + res.status + ')');
+      err.code = res.status;
+      throw err;
+    }
+    return res.json();
+  }
+
+  const fallback = async (prompt, opts) => callBackend(prompt, opts, false);
+  fallback.json = async (prompt, opts) => callBackend(prompt, opts, true);
+  sampleFn = fallback;
+  return sampleFn;
+}
+
+// ============ STEP 1 ============
+function renderStep1() {
+  const el = document.getElementById('step1');
+  el.innerHTML = `
+    <div class="card">
+      <h2>Paste your raw keyword list</h2>
+      <div class="hint">One keyword per line, followed by its search volume. Example:<br>
+      <span class="mono" style="font-size:12px">flagstaff refrigerator repair, 210</span></div>
+      <div class="field">
+        <textarea id="kwInput" rows="10" placeholder="keyword, volume">${STATE.rawKeywords}</textarea>
+      </div>
+      <div class="hint">Every keyword will also be checked individually for branded intent -- no list needed, you'll get to confirm or override anything flagged.</div>
+      <button id="analyzeBtn">Analyze &amp; assign tiers</button>
+      <div id="step1Result"></div>
+    </div>
+  `;
+  document.getElementById('analyzeBtn').addEventListener('click', analyzeKeywords);
+}
+
+function parseKeywordInput(raw) {
+  return raw.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+    const parts = line.split(/,|\t/).map(p => p.trim()).filter(p => p !== '');
+    // Scan from the end for the first part that is purely a number -- that's the volume.
+    // Anything after it (like a leftover tier label) is ignored. Anything before it is the keyword.
+    let volIdx = -1;
+    for (let i = parts.length - 1; i >= 0; i--) {
+      if (/^\d+$/.test(parts[i])) { volIdx = i; break; }
+    }
+    if (volIdx === -1) return null; // no real number found on this line at all
+    const vol = parseInt(parts[volIdx], 10);
+    const kw = parts.slice(0, volIdx).join(' ').trim();
+    return kw ? { keyword: kw, volume: vol } : null;
+  }).filter(Boolean);
+}
+
+function normalizeForMatch(s) {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function groupByVolume(list) {
+  const groups = {};
+  list.forEach(k => {
+    if (!groups[k.volume]) groups[k.volume] = [];
+    groups[k.volume].push(k.keyword);
+  });
+  const sortedVolumes = Object.keys(groups).map(Number).sort((a, b) => b - a);
+  return sortedVolumes.map(v => ({ volume: v, keywords: groups[v] }));
+}
+
+async function verifyKeywordsForBranding(list) {
+  const sample = await getSample();
+  if (!sample) return list.map(k => ({ ...k, verdict: 'generic', confidence: 'low', reason: 'AI unavailable -- not checked' }));
+
+  const BATCH_SIZE = 35;
+  const results = [];
+  for (let i = 0; i < list.length; i += BATCH_SIZE) {
+    const batch = list.slice(i, i + BATCH_SIZE);
+    const prompt = `You are checking a keyword list for a local service business to see which keywords are likely searches FOR A SPECIFIC COMPETITOR'S BUSINESS (branded) versus a generic service search anyone could type regardless of which company they end up calling.
+
+Use your own judgment about what a real local competitor's business name would plausibly look like in this niche -- you are not given a list, decide independently for each keyword.
+
+RULES:
+- Do NOT flag a keyword just because it contains one common word that could also appear in a brand name (like "guy", "appliance", "repair", "service"). "appliance repair guys near me" is a generic plural reference to repairmen, not a specific business, even though it contains "guy".
+- ONLY flag a keyword as branded if, taken as a WHOLE PHRASE, it plausibly means "this specific company" to someone typing it -- e.g. "the appliance guy near me", "that appliance guy", "appliance service today" read as a specific company's name, with or without a location word attached.
+- You must return a verdict for EVERY keyword below, in the same order, none skipped.
+
+Keywords to check (keyword, volume):
+${batch.map(k => `${k.keyword}, ${k.volume}`).join('\n')}
+
+Return ONLY valid JSON: {"results": [{"keyword": "...", "verdict": "branded" or "generic", "confidence": "high" or "medium" or "low", "reason": "short reason"}]} -- one entry per keyword above, same order, same count.`;
+
+    try {
+      const batchResult = await sample.json(prompt, { modelTier: "default" });
+      const batchList = batchResult.results || [];
+      batch.forEach((item, idx) => {
+        const r = batchList[idx] || { verdict: 'generic', confidence: 'low', reason: 'no response for this item -- left generic, please double check' };
+        results.push({ ...item, verdict: r.verdict, confidence: r.confidence, reason: r.reason });
+      });
+    } catch (err) {
+      batch.forEach(item => results.push({ ...item, verdict: 'generic', confidence: 'low', reason: 'check failed -- left generic, please double check' }));
+    }
+  }
+  return results;
+}
+
+async function analyzeKeywords() {
+  const raw = document.getElementById('kwInput').value;
+  STATE.rawKeywords = raw;
+  const list = parseKeywordInput(raw);
+  const resultEl = document.getElementById('step1Result');
+  if (list.length < 3) {
+    resultEl.innerHTML = `<p class="charcount over">Give at least 3 keywords so tiers can be assigned.</p>`;
+    return;
+  }
+  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Checking every keyword individually for branded intent (${list.length} to review)...</div>`;
+
+  const verified = await verifyKeywordsForBranding(list);
+  STATE.brandedCandidates = verified
+    .filter(v => v.verdict === 'branded')
+    .map(v => ({ ...v, confirmed: v.confidence === 'high' })); // pre-check high confidence only, still overridable
+  STATE.brandExcluded = []; // populated once user confirms via the review screen
+
+  renderBrandReview(resultEl, list);
+}
+
+function renderBrandReview(resultEl, fullList) {
+  STATE.currentFullList = fullList;
+  const candidates = STATE.brandedCandidates || [];
+  if (candidates.length === 0) {
+    resultEl.innerHTML = `<div class="flag-box" style="border-color:var(--primary)">
+      <div class="flag-title" style="color:var(--primary)">BRAND CHECK COMPLETE</div>
+      Checked all ${fullList.length} keywords individually -- none looked branded. Proceeding to tiering.
+    </div>`;
+    setTimeout(() => runTierAssignment(fullList, fullList, resultEl), 900);
+    return;
+  }
+  renderBrandReviewCards(resultEl, fullList);
+}
+
+function renderBrandReviewCards(resultEl, fullList) {
+  const candidates = STATE.brandedCandidates || [];
+  let html = `<div class="flag-box"><div class="flag-title">REVIEW BEFORE TIERING -- ${candidates.length} keyword(s) that could be branded</div>
+    Every keyword was checked individually, independently, with no pre-supplied list. Nothing is removed yet -- click a card to toggle it, then confirm.<br><br>`;
+  candidates.forEach((c, i) => {
+    html += `<div class="option-card ${c.confirmed ? 'selected' : ''}" style="padding:10px 14px;cursor:pointer" onclick="toggleBrandCandidate(${i})">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">${c.keyword}</span>
+          <span style="font-size:11.5px;color:var(--ink-soft)"> (vol ${c.volume})</span>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px">${c.reason} — confidence: ${c.confidence}</div>
+        </div>
+        <span style="font-size:11.5px;font-weight:600;white-space:nowrap;color:${c.confirmed ? 'var(--danger)' : 'var(--ink-soft)'}">${c.confirmed ? 'WILL BE EXCLUDED' : 'kept as generic'}</span>
+      </div>
+    </div>`;
+  });
+  html += `<div style="margin-top:12px;display:flex;gap:10px">
+    <button id="confirmBrandDecisions">Confirm decisions and assign tiers</button>
+    <button class="secondary" type="button" id="skipBrandReview">Skip this check, use every keyword as-is</button>
+  </div></div>`;
+  resultEl.innerHTML = html;
+  document.getElementById('confirmBrandDecisions').addEventListener('click', () => {
+    STATE.brandExcluded = STATE.brandedCandidates.filter(c => c.confirmed);
+    const excludedSet = new Set(STATE.brandExcluded.map(c => normalizeForMatch(c.keyword)));
+    const forTiering = fullList.filter(k => !excludedSet.has(normalizeForMatch(k.keyword)));
+    resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Grouping by volume and picking the most natural phrasing...</div>`;
+    runTierAssignment(forTiering, fullList, resultEl);
+  });
+  document.getElementById('skipBrandReview').addEventListener('click', () => {
+    STATE.brandExcluded = [];
+    resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Grouping by volume and picking the most natural phrasing...</div>`;
+    runTierAssignment(fullList, fullList, resultEl);
+  });
+}
+
+function toggleBrandCandidate(i) {
+  STATE.brandedCandidates[i].confirmed = !STATE.brandedCandidates[i].confirmed;
+  renderBrandReviewCards(document.getElementById('step1Result'), STATE.currentFullList);
+}
+
+async function runTierAssignment(forTiering, fullList, resultEl) {
+  STATE.currentFullList = fullList;
+  const sortedGroups = groupByVolume(forTiering);
+  const tierNames = ['primary', 'secondary', 'tertiary'];
+  const tiers = { primary: { main: '', variants: [] }, secondary: { main: '', variants: [] }, tertiary: { main: '', variants: [] }, related_pool: [], flags: [] };
+
+  sortedGroups.forEach((g, i) => {
+    if (i < 3) {
+      tiers[tierNames[i]].variants = [...g.keywords];
+    } else {
+      tiers.related_pool.push(...g.keywords);
+    }
+  });
+
+  const sample = await getSample();
+  if (sample) {
+    const promptGroups = tierNames
+      .filter(t => tiers[t].variants.length)
+      .map((t, i) => `GROUP ${i+1} (volume ${sortedGroups[i].volume}): ${tiers[t].variants.join(' | ')}`)
+      .join('\n');
+    const prompt = `Given these keyword groups, already correctly grouped by exact search volume (this grouping is fixed -- do not change which keyword belongs to which group):
+
+${promptGroups}
+
+Your ONLY job: within each group, pick whichever single phrase sounds most natural to say out loud. That becomes the "main" phrase for that group. Every other member of that same group stays a "variant" -- do not move any keyword to a different group, do not create new groups, do not drop any keyword.
+
+Return ONLY JSON: {"group1_main": "...", "group2_main": "...", "group3_main": "..." (omit a key if that group doesn't exist)}`;
+    try {
+      const picks = await sample.json(prompt, { modelTier: "quick" });
+      tierNames.forEach((t, i) => {
+        const key = 'group' + (i+1) + '_main';
+        if (picks[key] && tiers[t].variants.includes(picks[key])) {
+          tiers[t].main = picks[key];
+          tiers[t].variants = tiers[t].variants.filter(v => v !== picks[key]);
+        } else if (tiers[t].variants.length) {
+          tiers[t].main = tiers[t].variants.shift();
+        }
+      });
+    } catch (err) {
+      tierNames.forEach(t => { if (tiers[t].variants.length) tiers[t].main = tiers[t].variants.shift(); });
+    }
+  } else {
+    tierNames.forEach(t => { if (tiers[t].variants.length) tiers[t].main = tiers[t].variants.shift(); });
+  }
+
+  STATE.tiers = normalizeTiers(tiers);
+  STATE.missingKeywords = checkCompletenessWithBrands(fullList, tiers);
+  renderTierResults(resultEl);
+}
+
+function checkCompletenessWithBrands(inputList, result) {
+  const accountedFor = new Set();
+  ['primary', 'secondary', 'tertiary'].forEach(tier => {
+    if (result[tier]) {
+      if (result[tier].main) accountedFor.add(normalize(result[tier].main));
+      (result[tier].variants || []).forEach(v => accountedFor.add(normalize(v)));
+    }
+  });
+  (result.related_pool || []).forEach(v => accountedFor.add(normalize(v)));
+  (STATE.brandExcluded || []).forEach(b => accountedFor.add(normalize(b.keyword)));
+
+  return inputList
+    .map(k => k.keyword)
+    .filter(kw => !accountedFor.has(normalize(kw)));
+}
+
+function normalize(s) {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function checkCompleteness(inputList, result) {
+  const accountedFor = new Set();
+  ['primary', 'secondary', 'tertiary'].forEach(tier => {
+    if (result[tier]) {
+      if (result[tier].main) accountedFor.add(normalize(result[tier].main));
+      (result[tier].variants || []).forEach(v => accountedFor.add(normalize(v)));
+    }
+  });
+  (result.related_pool || []).forEach(v => accountedFor.add(normalize(v)));
+
+  return inputList
+    .map(k => k.keyword)
+    .filter(kw => !accountedFor.has(normalize(kw)));
+}
+
+function renderTierResults(resultEl) {
+  const t = STATE.tiers;
+  let html = '<div style="margin-top:20px">';
+
+  const brandExcluded = STATE.brandExcluded || [];
+
+  if (brandExcluded.length) {
+    html += `<div class="flag-box" style="border-color:var(--flag)"><div class="flag-title">EXCLUDED AS BRANDED — confirmed by you</div>
+      Pulled out before tiering, regardless of volume. Click to change your mind on any of these.<br><br>
+      ${brandExcluded.map((b, i) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;gap:8px">
+        <span class="variant-chip">${b.keyword} (vol ${b.volume}) — ${b.reason}</span>
+        <button class="secondary" type="button" style="font-size:11px;padding:4px 8px;white-space:nowrap" onclick="restoreBrandedKeyword(${i})">Not branded — restore it</button>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  if (STATE.missingKeywords && STATE.missingKeywords.length) {
+    html += `<div class="flag-box" style="border-color:var(--danger)"><div class="flag-title" style="color:var(--danger)">DROPPED KEYWORDS -- NOT ACCOUNTED FOR ANYWHERE</div>
+      These keywords from your list did not appear in Primary, Secondary, Tertiary, the related pool, or the branded-exclusion list. Do not proceed until these are placed somewhere.<br><br>
+      ${STATE.missingKeywords.map(k => `<span class="variant-chip" style="border-color:var(--danger);color:var(--danger)">${k}</span>`).join('')}
+      <div style="margin-top:10px"><button id="retryMissing" style="background:var(--danger)">Re-run analysis</button></div>
+    </div>`;
+  }
+
+  if (t.flags && t.flags.length) {
+    t.flags.forEach((f, i) => {
+      html += `<div class="flag-box"><div class="flag-title">NEEDS YOUR CALL</div>${f.issue}
+        ${f.options ? '<div style="margin-top:6px">' + f.options.map(o => `<span class="variant-chip">${o}</span>`).join('') + '</div>' : ''}
+        <div style="margin-top:10px">
+          <label style="font-weight:400;font-size:12px;margin-bottom:4px">Or ask your own question about this decision</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="flagQ${i}" placeholder="e.g. would these two show different Map Pack results in a small city vs a big city?">
+            <button class="secondary" style="white-space:nowrap" data-flagindex="${i}" data-flagissue="${f.issue.replace(/"/g,'&quot;')}" onclick="askAboutFlag(this)">Ask</button>
+          </div>
+          <div id="flagAnswer${i}" style="margin-top:8px;font-size:13px"></div>
+        </div>
+      </div>`;
+    });
+  }
+
+  ['primary', 'secondary', 'tertiary'].forEach(tier => {
+    const d = t[tier];
+    if (!d) return;
+    html += `<div class="tier-block ${tier}">
+      <div class="tier-label">${tier.toUpperCase()}</div>
+      <div class="main-kw">${d.main}</div>
+      ${d.variants && d.variants.length ? '<div>' + d.variants.map(v => `<span class="variant-chip">${v}</span>`).join('') + '</div>' : ''}
+    </div>`;
+  });
+
+  if (t.related_pool && t.related_pool.length) {
+    html += `<div class="tier-block"><div class="tier-label" style="color:var(--ink-soft)">RELATED POOL — not used on this page, save for blog / off-page</div>
+      ${t.related_pool.map(v => `<span class="variant-chip">${v}</span>`).join('')}</div>`;
+  }
+
+  const hasMissing = STATE.missingKeywords && STATE.missingKeywords.length;
+
+  html += `<div class="card" style="margin-top:16px;background:var(--bg)">
+    <div class="tier-label" style="color:var(--ink-soft);margin-bottom:10px">EDIT ASSIGNMENTS -- rearrange freely, one keyword per line, keep it under the right heading</div>
+    <textarea id="manualEdit" rows="10" class="mono">${formatTiersAsText(t)}</textarea>
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button class="secondary" id="applyManualEdit">Apply my changes</button>
+    </div>
+    <div style="margin-top:14px">
+      <label style="font-size:12.5px">Or just tell it in plain English what to change</label>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <input type="text" id="freeformEdit" placeholder="e.g. move the two near me keywords into their own tertiary group">
+        <button class="secondary" id="applyFreeform">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+    <button id="proceedStep2">Confirmed — continue to Meta Title &amp; Description</button>
+    <button class="secondary" id="downloadCsv">Download keyword checklist (CSV / Google Sheets)</button>
+  </div></div>`;
+
+  resultEl.innerHTML = html;
+  document.getElementById('proceedStep2').addEventListener('click', () => {
+    if (hasMissing) {
+      showMissingKeywordWarning(resultEl);
+      return;
+    }
+    goStep(2);
+  });
+  document.getElementById('applyManualEdit').addEventListener('click', applyManualEdit);
+  document.getElementById('applyFreeform').addEventListener('click', applyFreeformEdit);
+  document.getElementById('downloadCsv').addEventListener('click', downloadChecklistCsv);
+  const retryBtn = document.getElementById('retryMissing');
+  if (retryBtn) retryBtn.addEventListener('click', () => reRunTiering(resultEl));
+}
+
+function showMissingKeywordWarning(resultEl) {
+  const existing = document.getElementById('missingWarnBox');
+  if (existing) { existing.scrollIntoView({behavior:'smooth', block:'center'}); return; }
+  const box = document.createElement('div');
+  box.id = 'missingWarnBox';
+  box.className = 'flag-box';
+  box.style.borderColor = 'var(--danger)';
+  box.style.marginTop = '10px';
+  box.innerHTML = `
+    <div class="flag-title" style="color:var(--danger)">${STATE.missingKeywords.length} keyword(s) aren't placed anywhere yet</div>
+    ${STATE.missingKeywords.map(k => `<span class="variant-chip" style="border-color:var(--danger);color:var(--danger)">${k}</span>`).join('')}
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button id="continueAnywayBtn">Continue anyway</button>
+      <button class="secondary" type="button" id="cancelContinueBtn">Cancel, let me fix it</button>
+    </div>
+  `;
+  resultEl.appendChild(box);
+  box.scrollIntoView({behavior:'smooth', block:'center'});
+  document.getElementById('continueAnywayBtn').addEventListener('click', () => goStep(2));
+  document.getElementById('cancelContinueBtn').addEventListener('click', () => box.remove());
+}
+
+function restoreBrandedKeyword(index) {
+  STATE.brandExcluded.splice(index, 1);
+  reRunTiering(document.getElementById('step1Result'));
+}
+
+async function reRunTiering(resultEl) {
+  const fullList = parseKeywordInput(STATE.rawKeywords);
+  const confirmedExcludedNames = new Set((STATE.brandExcluded || []).map(b => normalizeForMatch(b.keyword)));
+  const forTiering = fullList.filter(k => !confirmedExcludedNames.has(normalizeForMatch(k.keyword)));
+  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Re-running tiering with your branded-keyword decisions...</div>`;
+  await runTierAssignment(forTiering, fullList, resultEl);
+}
+
+function formatTiersAsText(t) {
+  const line = (label, d) => `${label}: ${[d.main, ...(d.variants||[])].filter(Boolean).join(' | ')}`;
+  return [
+    line('PRIMARY', t.primary),
+    line('SECONDARY', t.secondary),
+    line('TERTIARY', t.tertiary),
+    `RELATED: ${(t.related_pool||[]).join(' | ')}`
+  ].join('\n');
+}
+
+function parseTiersFromText(text) {
+  const lines = text.split('\n');
+  const tiers = { primary: {main:'',variants:[]}, secondary: {main:'',variants:[]}, tertiary: {main:'',variants:[]}, related_pool: [] };
+  lines.forEach(line => {
+    const m = line.match(/^(PRIMARY|SECONDARY|TERTIARY|RELATED):\s*(.*)$/i);
+    if (!m) return;
+    const key = m[1].toUpperCase();
+    const items = m[2].split('|').map(s => s.trim()).filter(Boolean);
+    if (key === 'RELATED') { tiers.related_pool = items; return; }
+    const tierKey = key.toLowerCase();
+    tiers[tierKey].main = items[0] || '';
+    tiers[tierKey].variants = items.slice(1);
+  });
+  return tiers;
+}
+
+function applyManualEdit() {
+  const text = document.getElementById('manualEdit').value;
+  const newTiers = parseTiersFromText(text);
+  const inputList = parseKeywordInput(STATE.rawKeywords);
+  STATE.tiers = normalizeTiers(newTiers);
+  STATE.missingKeywords = checkCompleteness(inputList, newTiers);
+  renderTierResults(document.getElementById('step1Result'));
+}
+
+async function applyFreeformEdit() {
+  const instruction = document.getElementById('freeformEdit').value.trim();
+  if (!instruction) return;
+  const resultEl = document.getElementById('step1Result');
+  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Applying your change...</div>`;
+  const sample = await getSample();
+  const prompt = `Current keyword tiers:\n${formatTiersAsText(STATE.tiers)}\n\nUser instruction: "${instruction}"\n\nApply this instruction and return the updated tiers. Do not drop any keyword -- everything currently present must still appear somewhere (primary, secondary, tertiary, or related). Return ONLY valid JSON: {"primary":{"main":"...","variants":["..."]},"secondary":{"main":"...","variants":["..."]},"tertiary":{"main":"...","variants":["..."]},"related_pool":["..."]}`;
+  try {
+    const result = await sample.json(prompt, { modelTier: "default" });
+    const inputList = parseKeywordInput(STATE.rawKeywords);
+    STATE.tiers = normalizeTiers(result);
+    STATE.missingKeywords = checkCompleteness(inputList, result);
+    renderTierResults(resultEl);
+  } catch (err) {
+    resultEl.innerHTML = `<p class="charcount over">Couldn't apply that (${err.code || 'error'}). Try the manual edit box instead.</p>`;
+  }
+}
+
+function downloadChecklistCsv() {
+  const t = STATE.tiers;
+  const rows = [['Tier', 'Keyword', 'Used?']];
+  const addRows = (tierName, d) => {
+    if (d.main) rows.push([tierName, d.main, 'FALSE']);
+    (d.variants || []).forEach(v => rows.push([tierName, v, 'FALSE']));
+  };
+  addRows('Primary', t.primary);
+  addRows('Secondary', t.secondary);
+  addRows('Tertiary', t.tertiary);
+  (t.related_pool || []).forEach(v => rows.push(['Related (off-page)', v, 'FALSE']));
+
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'keyword-checklist.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function askAboutFlag(btn) {
+  const idx = btn.getAttribute('data-flagindex');
+  const issue = btn.getAttribute('data-flagissue');
+  const q = document.getElementById('flagQ' + idx).value.trim();
+  const answerEl = document.getElementById('flagAnswer' + idx);
+  if (!q) return;
+  answerEl.innerHTML = `<div class="loading"><div class="spinner"></div>Thinking it through...</div>`;
+  const sample = await getSample();
+  try {
+    const result = await sample(
+      `Context: a keyword grouping tool flagged this decision for human review: "${issue}"\n\nThe user is asking: ${q}\n\nAnswer directly and honestly in 2-4 sentences. If you genuinely don't know without an actual live search, say so plainly instead of guessing with false confidence.`,
+      { modelTier: "default" }
+    );
+    answerEl.innerHTML = `<div style="padding:10px 12px;background:var(--bg);border-radius:6px;border:1px solid var(--line)">${result.text}</div>`;
+  } catch (err) {
+    answerEl.innerHTML = `<p class="charcount over">Couldn't get an answer (${err.code || 'error'}). Try again.</p>`;
+  }
+}
+
+// ============ STEP 2 ============
+function renderStep2() {
+  const el = document.getElementById('step2');
+  if (!STATE.tiers) { el.innerHTML = `<div class="empty-note">Complete Step 1 first.</div>`; return; }
+  el.innerHTML = `
+    <div class="card">
+      <h2>Tell us about the page</h2>
+      <div class="hint">We've already drafted an ICP and pain-point summary from your confirmed keywords below. Edit it, or add specifics (business name, exact city, anything unique) if you have them -- it's optional.</div>
+      <div id="autoContext" class="loading"><div class="spinner"></div>Reading the niche and pain points from your keywords...</div>
+      <div class="field" style="display:none" id="contextField">
+        <label>Context (auto-drafted -- edit freely)</label>
+        <textarea id="nicheInput" rows="3"></textarea>
+      </div>
+      <div class="field">
+        <label>Optional: paste 1-3 competitor titles/descriptions to analyze</label>
+        <textarea id="competitorInput" rows="4" placeholder="Paste competitor SEO titles and meta descriptions here, one per line"></textarea>
+      </div>
+      <button id="genMetaBtn" disabled>Generate Meta Titles &amp; Descriptions</button>
+      <div id="step2Result"></div>
+    </div>
+  `;
+  document.getElementById('genMetaBtn').addEventListener('click', generateMeta);
+  autoDraftContext();
+}
+
+async function autoDraftContext() {
+  const sample = await getSample();
+  const t = STATE.tiers;
+  const genBtn = document.getElementById('genMetaBtn');
+  if (!sample) {
+    document.getElementById('autoContext').style.display = 'none';
+    document.getElementById('contextField').style.display = 'block';
+    document.getElementById('nicheInput').value = STATE.niche || '';
+    genBtn.disabled = false;
+    return;
+  }
+  const prompt = `Based only on this keyword set, infer the niche/service, the likely ICP (who is searching), and the 1-2 strongest pain points this page should resolve. Be specific, not generic.
+
+Primary: ${t.primary.main}
+Secondary: ${t.secondary.main}
+Tertiary: ${t.tertiary.main || '(none)'}
+
+Return ONLY plain text, 2-3 sentences, written as if a strategist is briefing a copywriter. No JSON, no headers.`;
+  try {
+    const result = await sample(prompt, { modelTier: "quick" });
+    STATE.niche = result.text.trim();
+  } catch (err) {
+    STATE.niche = '';
+  }
+  document.getElementById('autoContext').style.display = 'none';
+  document.getElementById('contextField').style.display = 'block';
+  document.getElementById('nicheInput').value = STATE.niche;
+  genBtn.disabled = false;
+}
+
+function findMatches(text, phrases) {
+  const spans = [];
+  phrases.filter(Boolean).forEach(p => {
+    const pattern = new RegExp('(?<![\\w])' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w])', 'gi');
+    let m;
+    while ((m = pattern.exec(text)) !== null) {
+      spans.push({ start: m.index, end: m.index + m[0].length });
+    }
+  });
+  return spans;
+}
+
+function highlightKeywords(text, primaryPhrases, secondaryPhrases) {
+  const pSpans = findMatches(text, primaryPhrases).map(s => ({...s, tier: 'p'}));
+  const sSpans = findMatches(text, secondaryPhrases).map(s => ({...s, tier: 's'}));
+  let all = [...pSpans, ...sSpans].sort((a,b) => a.start - b.start || (b.end-b.start) - (a.end-a.start));
+
+  // merge overlapping spans; if a primary and secondary overlap, mark combined
+  const merged = [];
+  all.forEach(span => {
+    const last = merged[merged.length - 1];
+    if (last && span.start < last.end) {
+      last.end = Math.max(last.end, span.end);
+      if (last.tier !== span.tier) last.tier = 'combined';
+    } else {
+      merged.push({...span});
+    }
+  });
+
+  let out = '', cursor = 0;
+  const colorClass = { p: 'hl-primary', s: 'hl-secondary', combined: 'hl-combined' };
+  merged.forEach(span => {
+    out += escapeHtml(text.slice(cursor, span.start));
+    out += `<mark class="${colorClass[span.tier]}">${escapeHtml(text.slice(span.start, span.end))}</mark>`;
+    cursor = span.end;
+  });
+  out += escapeHtml(text.slice(cursor));
+  return out;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function generateMeta() {
+  STATE.niche = document.getElementById('nicheInput').value;
+  STATE.competitorText = document.getElementById('competitorInput') ? document.getElementById('competitorInput').value.trim() : '';
+  STATE.selectedTitleIdx = null;
+  STATE.selectedDescIdx = null;
+  STATE.metaOptions = { titles: [], descriptions: [] };
+  await generateTitles();
+}
+
+async function generateTitles() {
+  const resultEl = document.getElementById('step2Result');
+  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Writing title options...</div>`;
+  const sample = await getSample();
+  const t = STATE.tiers;
+  const allPrimary = [t.primary.main, ...(t.primary.variants||[])].filter(Boolean);
+  const allSecondary = [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean);
+  const competitorBlock = STATE.competitorText
+    ? `\n\nCompetitor titles/descriptions currently ranking, for reference (study structure, don't copy wording):\n${STATE.competitorText}` : '';
+
+  const prompt = `Write 3 different SEO title options for a local service page.
+
+Primary keyword (use exactly, unmodified, pick whichever variant fits each option best): ${allPrimary.join(' | ')}
+Secondary keyword (use exactly, unmodified): ${allSecondary.join(' | ')}
+Context: ${STATE.niche}${competitorBlock}
+
+RULES, IN PRIORITY ORDER:
+1. NEVER exceed 60 characters. This is a hard ceiling, not a guideline -- going over is not allowed under any circumstance.
+2. Within that 60-character ceiling, try hard to include both a Primary variant AND a Secondary variant.
+3. If a Secondary variant already contains a Primary variant as a substring, use that Secondary phrase once -- it satisfies both requirements at once, costs fewer characters, and is the cleanest option when it's available. Always check for this before assuming they must be written separately.
+4. If there is genuinely no way to fit both within 60 characters, keep the Primary variant (it is mandatory) and leave Secondary out of that specific option rather than exceeding the limit.
+5. Vary which exact Primary/Secondary variant each of the 3 options uses where natural, so they don't all read identically.
+6. Every keyword exact, word for word. No hedging words. Natural sentence flow.
+
+Return ONLY valid JSON: {"titles": ["...", "...", "..."]}`;
+
+  try {
+    const result = await sample.json(prompt, { modelTier: "default" });
+    STATE.metaOptions.titles = result.titles;
+    const noneHaveSecondary = result.titles.every(title => !allSecondary.some(s => keywordAppearsIn(s, title)));
+    renderTitleStage(resultEl, allPrimary, allSecondary);
+    if (noneHaveSecondary) {
+      resultEl.insertAdjacentHTML('afterbegin', `<div class="flag-box" style="border-color:var(--danger);margin-bottom:14px">
+        <div class="flag-title" style="color:var(--danger)">None of these 3 options actually include the Secondary keyword</div>
+        This can happen honestly now -- Primary and Secondary together may genuinely not fit under 60 characters, and the limit is a hard cap that can't be exceeded. Try the shortest possible pairing below, or accept that Secondary sits this one out.
+        <div style="margin-top:10px"><button id="retryTitlesBtn">Try the shortest possible combination instead</button></div>
+      </div>`);
+      document.getElementById('retryTitlesBtn').addEventListener('click', () => retryTitlesForceSecondary(allPrimary, allSecondary));
+    }
+  } catch (err) {
+    resultEl.innerHTML = `<p class="charcount over">Something went wrong (${err.code || 'error'}). Try again.</p>`;
+  }
+}
+
+async function retryTitlesForceSecondary(allPrimary, allSecondary) {
+  const resultEl = document.getElementById('step2Result');
+  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Trying the shortest possible Primary + Secondary combination...</div>`;
+  const sample = await getSample();
+  const prompt = `Write 3 title options. The 60-character limit is a hard ceiling -- never exceed it, no exceptions.
+
+Primary variants, shortest first where possible: ${[...allPrimary].sort((a,b) => a.length - b.length).join(' | ')}
+Secondary variants, shortest first where possible: ${[...allSecondary].sort((a,b) => a.length - b.length).join(' | ')}
+Context: ${STATE.niche}
+
+Deliberately pick the SHORTEST Primary variant and SHORTEST Secondary variant from the lists above, and check first whether the Secondary variant already contains the Primary variant as a substring -- that combination costs the fewest characters and is the most likely to fit both within 60.
+
+If, even using the shortest pairing, both truly cannot fit in 60 characters, keep Primary (mandatory) and leave Secondary out rather than exceeding the limit -- do not go over 60 under any circumstance.
+
+Return ONLY valid JSON: {"titles": ["...", "...", "..."]}`;
+  try {
+    const result = await sample.json(prompt, { modelTier: "default" });
+    STATE.metaOptions.titles = result.titles;
+    renderTitleStage(resultEl, allPrimary, allSecondary);
+  } catch (err) {
+    resultEl.innerHTML = `<p class="charcount over">Something went wrong (${err.code || 'error'}). Try again.</p>`;
+  }
+}
+
+function renderTitleStage(resultEl, allPrimary, allSecondary) {
+  let html = `
+    <div class="legend-box" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:16px 0;font-size:12.5px;color:var(--ink-soft)">
+      <span><span class="legend-swatch hl-primary"></span> Primary keyword</span>
+      <span><span class="legend-swatch hl-secondary"></span> Secondary keyword</span>
+      <span><span class="legend-swatch hl-combined"></span> Both at once (one phrase covers both)</span>
+    </div>
+    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:2;min-width:320px">
+        <div class="hint" style="margin-bottom:10px">Step 1 of 2 -- choose a title. Description options come next, built to use a different keyword variant than whichever title you pick here.</div>`;
+
+  STATE.metaOptions.titles.forEach((title, i) => {
+    const len = title.length;
+    const sel = STATE.selectedTitleIdx === i;
+    html += `<div class="option-card ${sel ? 'selected' : ''}" onclick="selectTitle(${i})">
+      <div style="font-size:14.5px;font-weight:500">${highlightKeywords(title, allPrimary, allSecondary)}</div>
+      <div class="charcount ${len > 60 ? 'over' : ''}" style="margin-top:6px">${len} / 60 characters</div>
+    </div>`;
+  });
+
+  html += `<div style="margin-top:12px" id="titleStageActions"></div></div>
+      <div style="flex:1;min-width:220px;position:sticky;top:20px">
+        <div class="card" style="padding:16px">
+          <div class="tier-label" style="color:var(--ink-soft);margin-bottom:10px">KEYWORD TRACKER</div>
+          <div id="keywordSidebar"></div>
+        </div>
+      </div>
+    </div>`;
+  resultEl.innerHTML = html;
+  renderKeywordSidebar();
+  updateTitleStageActions();
+}
+
+function selectTitle(i) {
+  STATE.selectedTitleIdx = i;
+  const t = STATE.tiers;
+  const allPrimary = [t.primary.main, ...(t.primary.variants||[])].filter(Boolean);
+  const allSecondary = [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean);
+  renderTitleStage(document.getElementById('step2Result'), allPrimary, allSecondary);
+}
+
+function updateTitleStageActions() {
+  const el = document.getElementById('titleStageActions');
+  if (!el) return;
+  if (STATE.selectedTitleIdx === null) {
+    el.innerHTML = `<div class="empty-note" style="text-align:left;padding:0">Pick a title above to continue.</div>`;
+  } else {
+    el.innerHTML = `
+      <div class="card" style="background:var(--bg);padding:14px;margin-bottom:12px">
+        <label style="font-size:12.5px">Want a tweak on this one? Describe it</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <input type="text" id="titleTweakInput" placeholder="e.g. add 'same-day' before the keyword, or combine it with the phrase X">
+          <button class="secondary" id="applyTitleTweak">Apply tweak</button>
+        </div>
+      </div>
+      <button id="toDescStage">Use this title -- generate description options</button>`;
+    document.getElementById('toDescStage').addEventListener('click', generateDescriptions);
+    document.getElementById('applyTitleTweak').addEventListener('click', refineSelectedTitle);
+  }
+}
+
+async function refineSelectedTitle() {
+  const instruction = document.getElementById('titleTweakInput').value.trim();
+  if (!instruction) return;
+  const t = STATE.tiers;
+  const allPrimary = [t.primary.main, ...(t.primary.variants||[])].filter(Boolean);
+  const allSecondary = [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean);
+  const currentTitle = STATE.metaOptions.titles[STATE.selectedTitleIdx];
+  const resultEl = document.getElementById('step2Result');
+  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Applying your tweak...</div>`;
+  const sample = await getSample();
+  const prompt = `Current title: "${currentTitle}"
+
+User wants this change: ${instruction}
+
+Rules that still apply: must contain a Primary variant (${allPrimary.join(' | ')}) and a Secondary variant (${allSecondary.join(' | ')}), both exact and unmodified, word for word. Try to stay near 60 characters but keeping both keywords matters more than the limit. Apply the user's requested change while keeping these rules intact.
+
+Return ONLY valid JSON: {"title": "..."}`;
+  try {
+    const result = await sample.json(prompt, { modelTier: "default" });
+    STATE.metaOptions.titles[STATE.selectedTitleIdx] = result.title;
+    renderTitleStage(resultEl, allPrimary, allSecondary);
+  } catch (err) {
+    resultEl.innerHTML = `<p class="charcount over">Something went wrong (${err.code || 'error'}). Try again.</p>`;
+  }
+}
+
+async function generateDescriptions() {
+  const resultEl = document.getElementById('step2Result');
+  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Writing description options that don't repeat your title's keyword variant...</div>`;
+  const sample = await getSample();
+  const t = STATE.tiers;
+  const allPrimary = [t.primary.main, ...(t.primary.variants||[])].filter(Boolean);
+  const allSecondary = [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean);
+  const selectedTitle = STATE.metaOptions.titles[STATE.selectedTitleIdx];
+  const usedPrimary = allPrimary.find(p => keywordAppearsIn(p, selectedTitle)) || allPrimary[0];
+  const usedSecondary = allSecondary.find(s => keywordAppearsIn(s, selectedTitle));
+
+  const prompt = `Write 3 different meta description options for a local service page. This page's chosen SEO title was: "${selectedTitle}"
+
+Primary keyword variants: ${allPrimary.join(' | ')}
+Secondary keyword variants: ${allSecondary.join(' | ')}
+Context: ${STATE.niche}
+
+RULES:
+- Do NOT reuse the exact primary variant "${usedPrimary}" that the title already used -- pick a different primary variant for the description.
+${usedSecondary ? `- The title already used the secondary variant "${usedSecondary}" -- if you include secondary in the description, use a DIFFERENT secondary variant, not that same one.` : ''}
+- Each description 150 characters, never more, resolves the pain point(s) in the context, ends with a call to action.
+- Try to naturally include a Secondary variant too if it fits without forcing it -- if it doesn't fit naturally, leave it out of that option.
+- Every keyword exact, word for word. No hedging words. Natural sentence flow.
+
+Return ONLY valid JSON: {"descriptions": ["...", "...", "..."]}`;
+
+  try {
+    const result = await sample.json(prompt, { modelTier: "default" });
+    STATE.metaOptions.descriptions = result.descriptions;
+    renderDescriptionStage(resultEl, allPrimary, allSecondary);
+  } catch (err) {
+    resultEl.innerHTML = `<p class="charcount over">Something went wrong (${err.code || 'error'}). Try again.</p>`;
+  }
+}
+
+function renderDescriptionStage(resultEl, allPrimary, allSecondary) {
+  const selectedTitle = STATE.metaOptions.titles[STATE.selectedTitleIdx];
+  let html = `
+    <div class="legend-box" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:16px 0;font-size:12.5px;color:var(--ink-soft)">
+      <span><span class="legend-swatch hl-primary"></span> Primary keyword</span>
+      <span><span class="legend-swatch hl-secondary"></span> Secondary keyword</span>
+      <span><span class="legend-swatch hl-combined"></span> Both at once</span>
+    </div>
+    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:2;min-width:320px">
+        <div class="option-card" style="background:var(--bg);cursor:default">
+          <div style="font-size:11px;color:var(--ink-soft);margin-bottom:4px">YOUR SELECTED TITLE</div>
+          <div style="font-size:14px">${highlightKeywords(selectedTitle, allPrimary, allSecondary)}</div>
+          <button class="secondary" type="button" style="margin-top:8px;font-size:12px;padding:5px 10px" onclick="backToTitleStage()">Change title</button>
+        </div>
+        <div class="hint" style="margin:14px 0 10px">Step 2 of 2 -- choose a description.</div>`;
+
+  STATE.metaOptions.descriptions.forEach((desc, i) => {
+    const len = desc.length;
+    const hasSecondary = allSecondary.some(s => keywordAppearsIn(s, desc));
+    const sel = STATE.selectedDescIdx === i;
+    html += `<div class="option-card ${sel ? 'selected' : ''}" onclick="selectDescription(${i})">
+      <div style="font-size:14px;font-weight:400">${highlightKeywords(desc, allPrimary, allSecondary)}</div>
+      <div class="charcount ${len > 150 ? 'over' : ''}" style="margin-top:6px">${len} / 150 characters &middot; ${hasSecondary ? 'secondary used check' : 'secondary not used'}</div>
+      ${!hasSecondary ? `<button class="secondary" type="button" style="margin-top:6px;font-size:12px;padding:6px 12px" onclick="event.stopPropagation();retryWithSecondary(${i})">Try to fit secondary in naturally</button>` : ''}
+    </div>`;
+  });
+
+  html += `<div style="margin-top:12px" id="descStageActions"></div></div>
+      <div style="flex:1;min-width:220px;position:sticky;top:20px">
+        <div class="card" style="padding:16px">
+          <div class="tier-label" style="color:var(--ink-soft);margin-bottom:10px">KEYWORD TRACKER</div>
+          <div id="keywordSidebar"></div>
+        </div>
+      </div>
+    </div>`;
+  resultEl.innerHTML = html;
+  renderKeywordSidebar();
+  updateDescStageActions();
+}
+
+function backToTitleStage() {
+  STATE.selectedDescIdx = null;
+  const t = STATE.tiers;
+  const allPrimary = [t.primary.main, ...(t.primary.variants||[])].filter(Boolean);
+  const allSecondary = [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean);
+  renderTitleStage(document.getElementById('step2Result'), allPrimary, allSecondary);
+}
+
+function selectDescription(i) {
+  STATE.selectedDescIdx = i;
+  const t = STATE.tiers;
+  const allPrimary = [t.primary.main, ...(t.primary.variants||[])].filter(Boolean);
+  const allSecondary = [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean);
+  renderDescriptionStage(document.getElementById('step2Result'), allPrimary, allSecondary);
+}
+
+function updateDescStageActions() {
+  const el = document.getElementById('descStageActions');
+  if (!el) return;
+  if (STATE.selectedDescIdx === null) {
+    el.innerHTML = `<div class="empty-note" style="text-align:left;padding:0">Pick a description above to finalize.</div>`;
+  } else {
+    el.innerHTML = `
+      <div class="card" style="background:var(--bg);padding:14px;margin-bottom:12px">
+        <label style="font-size:12.5px">Want a tweak on this one? Describe it</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <input type="text" id="descTweakInput" placeholder="e.g. mention same-day service earlier, or work in the word 'affordable'">
+          <button class="secondary" id="applyDescTweak">Apply tweak</button>
+        </div>
+      </div>
+      <button id="finalizeBtn">Finalize this Title &amp; Description</button>`;
+    document.getElementById('finalizeBtn').addEventListener('click', finalizeMeta);
+    document.getElementById('applyDescTweak').addEventListener('click', refineSelectedDescription);
+  }
+}
+
+async function refineSelectedDescription() {
+  const instruction = document.getElementById('descTweakInput').value.trim();
+  if (!instruction) return;
+  const t = STATE.tiers;
+  const allPrimary = [t.primary.main, ...(t.primary.variants||[])].filter(Boolean);
+  const allSecondary = [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean);
+  const currentDesc = STATE.metaOptions.descriptions[STATE.selectedDescIdx];
+  const resultEl = document.getElementById('step2Result');
+  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Applying your tweak...</div>`;
+  const sample = await getSample();
+  const prompt = `Current description: "${currentDesc}"
+
+User wants this change: ${instruction}
+
+Rules that still apply: 150 characters, never more, must contain a Primary variant (${allPrimary.join(' | ')}) exact and unmodified. If it can also naturally fit a Secondary variant (${allSecondary.join(' | ')}), keep or add it -- but don't force it if it breaks the flow. Apply the user's requested change while keeping these rules intact.
+
+Return ONLY valid JSON: {"description": "..."}`;
+  try {
+    const result = await sample.json(prompt, { modelTier: "default" });
+    STATE.metaOptions.descriptions[STATE.selectedDescIdx] = result.description;
+    renderDescriptionStage(resultEl, allPrimary, allSecondary);
+  } catch (err) {
+    resultEl.innerHTML = `<p class="charcount over">Something went wrong (${err.code || 'error'}). Try again.</p>`;
+  }
+}
+
+function keywordAppearsIn(keyword, text) {
+  if (!text) return false;
+  const pattern = new RegExp('(?<![\\w])' + keyword.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '(?![\\w])', 'i');
+  return pattern.test(text);
+}
+
+function countOccurrences(phrase, text) {
+  if (!text || !phrase) return 0;
+  const pattern = new RegExp('(?<![\\w])' + phrase.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '(?![\\w])', 'gi');
+  return (text.match(pattern) || []).length;
+}
+
+function extractQuotedPhrase(instruction) {
+  if (!instruction) return null;
+  const m = instruction.match(/'([^']+)'/);
+  return m ? m[1] : null;
+}
+
+function normalizeTiers(raw) {
+  const empty = () => ({ main: '', variants: [] });
+  return {
+    primary: (raw && raw.primary) ? { main: raw.primary.main || '', variants: raw.primary.variants || [] } : empty(),
+    secondary: (raw && raw.secondary) ? { main: raw.secondary.main || '', variants: raw.secondary.variants || [] } : empty(),
+    tertiary: (raw && raw.tertiary) ? { main: raw.tertiary.main || '', variants: raw.tertiary.variants || [] } : empty(),
+    related_pool: (raw && raw.related_pool) || [],
+    flags: (raw && raw.flags) || []
+  };
+}
+
+function buildUsageMap() {
+  const usage = {};
+  function record(phrase, location) {
+    if (!phrase) return;
+    const key = normalizeForMatch(phrase);
+    usage[key] = usage[key] || [];
+    usage[key].push(location);
+  }
+  const t = STATE.tiers ? normalizeTiers(STATE.tiers) : null;
+  if (!t) return usage;
+  const allByTier = {
+    primary: [t.primary.main, ...(t.primary.variants||[])].filter(Boolean),
+    secondary: [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean),
+    tertiary: [t.tertiary.main, ...(t.tertiary.variants||[])].filter(Boolean)
+  };
+  const previewTitle = STATE.meta
+    ? STATE.meta.title
+    : (STATE.metaOptions && STATE.selectedTitleIdx !== null && STATE.selectedTitleIdx !== undefined ? STATE.metaOptions.titles[STATE.selectedTitleIdx] : null);
+  const previewDesc = STATE.meta
+    ? STATE.meta.description
+    : (STATE.metaOptions && STATE.selectedDescIdx !== null && STATE.selectedDescIdx !== undefined ? STATE.metaOptions.descriptions[STATE.selectedDescIdx] : null);
+  if (previewTitle || previewDesc) {
+    Object.values(allByTier).flat().forEach(kw => {
+      if (keywordAppearsIn(kw, previewTitle)) record(kw, STATE.meta ? 'meta title' : 'meta title (selected, not finalized yet)');
+      if (keywordAppearsIn(kw, previewDesc)) record(kw, STATE.meta ? 'meta description' : 'meta description (selected, not finalized yet)');
+    });
+  }
+  if (STATE.annotated) {
+    STATE.annotated.forEach(h => {
+      if (h.keyword_used) record(h.keyword_used, `heading: "${h.text}"`);
+    });
+  }
+  return usage;
+}
+
+function renderKeywordSidebar(containerId) {
+  containerId = containerId || 'keywordSidebar';
+  const sidebar = document.getElementById(containerId);
+  if (!sidebar) {
+    console.warn('renderKeywordSidebar: container #' + containerId + ' not found in the DOM at render time.');
+    return;
+  }
+
+  try {
+    if (!STATE.tiers) {
+      sidebar.innerHTML = `<div style="font-size:12px;color:var(--danger)">No keyword data loaded (STATE.tiers is empty). This shouldn't happen at this step -- go back to Step 1 and confirm your tiers again.</div>`;
+      return;
+    }
+
+    const t = normalizeTiers(STATE.tiers);
+    const usage = buildUsageMap();
+
+    function tierList(label, colorHex, mainAndVariants) {
+      const clean = mainAndVariants.filter(Boolean);
+      if (clean.length === 0) return '';
+      let h = `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:600;color:${colorHex}">${label}</div>`;
+      clean.forEach(kw => {
+        const locs = usage[normalizeForMatch(kw)] || [];
+        const used = locs.length > 0;
+        h += `<div style="font-family:'IBM Plex Mono',monospace;font-size:12px;padding:4px 0;">
+          <span style="${used ? 'text-decoration: line-through; text-decoration-thickness: 2px; color: var(--ink-soft);' : ''}">${kw}</span>
+          ${used ? `<div style="font-size:10px;opacity:0.85;padding-left:2px;margin-top:2px">— used in: ${locs.join(', ')}</div>` : ''}
+        </div>`;
+      });
+      return h + `</div>`;
+    }
+
+    const primaryHtml = tierList('PRIMARY', '#2F5D50', [t.primary.main, ...(t.primary.variants||[])]);
+    const secondaryHtml = tierList('SECONDARY', '#3C4F78', [t.secondary.main, ...(t.secondary.variants||[])]);
+    const tertiaryHtml = t.tertiary.main ? tierList('TERTIARY (used later, in H3)', '#8A4A2F', [t.tertiary.main, ...(t.tertiary.variants||[])]) : '';
+
+    const combined = primaryHtml + secondaryHtml + tertiaryHtml;
+    sidebar.innerHTML = combined || `<div style="font-size:12px;color:var(--danger)">Tiers exist but contain no actual keyword text (Primary/Secondary/Tertiary are all empty). Something upstream produced an empty tier -- check Step 1's tier assignment.</div>`;
+  } catch (err) {
+    sidebar.innerHTML = `<div style="font-size:12px;color:var(--danger)">Tracker failed to render: ${err.message}. Please copy this exact message back if you report this.</div>`;
+    console.error('renderKeywordSidebar error:', err);
+  }
+}
+
+async function retryWithSecondary(index) {
+  const sample = await getSample();
+  const t = STATE.tiers;
+  const allPrimary = [t.primary.main, ...(t.primary.variants||[])].filter(Boolean);
+  const allSecondary = [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean);
+  const original = STATE.metaOptions.descriptions[index];
+  const selectedTitle = STATE.metaOptions.titles[STATE.selectedTitleIdx];
+  const secondaryUsedInTitle = allSecondary.find(s => keywordAppearsIn(s, selectedTitle));
+  const primaryAlreadyInDesc = allPrimary.find(p => keywordAppearsIn(p, original));
+
+  const prompt = `Rewrite this meta description so it naturally includes exactly ONE secondary keyword variant, without forcing it or breaking natural flow.
+
+Original description: "${original}"
+${primaryAlreadyInDesc ? `This description already correctly contains the primary variant "${primaryAlreadyInDesc}" -- you MUST keep that primary variant in your rewrite, unchanged.` : `Make sure your rewrite still contains a primary variant from this list: ${allPrimary.join(' | ')}`}
+Secondary keyword variants available: ${allSecondary.join(' | ')}
+${secondaryUsedInTitle ? `The title already used the secondary variant "${secondaryUsedInTitle}" -- do NOT use that same one again here, pick a different secondary variant from the list.` : ''}
+
+HARD RULES:
+- Exactly ONE secondary variant total, never two.
+- The primary variant must still be present -- do not remove it to make room for secondary.
+- Stay at 150 characters, never more.
+- If it truly cannot fit both naturally, say so instead of forcing it.
+
+Return ONLY valid JSON: {"description": "...", "possible": true or false}`;
+  try {
+    const result = await sample.json(prompt, { modelTier: "default" });
+    if (result.possible) {
+      const secondaryCount = allSecondary.filter(s => keywordAppearsIn(s, result.description)).length;
+      const primaryStillPresent = allPrimary.some(p => keywordAppearsIn(p, result.description));
+      if (secondaryCount > 1 || !primaryStillPresent) {
+        const resultEl = document.getElementById('step2Result');
+        renderDescriptionStage(resultEl, allPrimary, allSecondary);
+        resultEl.insertAdjacentHTML('afterbegin', `<div class="flag-box" style="border-color:var(--danger);margin-bottom:14px">
+          <div class="flag-title" style="color:var(--danger)">Rewrite broke a rule -- not applied</div>
+          ${!primaryStillPresent ? 'It dropped the primary keyword. ' : ''}${secondaryCount > 1 ? 'It used ' + secondaryCount + ' secondary variants instead of one. ' : ''}Kept your original description instead. Try again or edit manually.
+        </div>`);
+        return;
+      }
+      STATE.metaOptions.descriptions[index] = result.description;
+      STATE.selectedDescIdx = index;
+    }
+    renderDescriptionStage(document.getElementById('step2Result'), allPrimary, allSecondary);
+  } catch (err) {}
+}
+
+function finalizeMeta() {
+  const title = STATE.metaOptions.titles[STATE.selectedTitleIdx];
+  const description = STATE.metaOptions.descriptions[STATE.selectedDescIdx];
+  STATE.meta = { title, description };
+  const el = document.getElementById('step2Result');
+  el.insertAdjacentHTML('beforeend', `
+    <div class="flag-box" style="border-color:var(--primary);background:transparent;margin-top:14px;max-width:640px">
+      <div class="flag-title" style="color:var(--primary)">FINALIZED</div>
+      This title and description are locked in and will carry forward.
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button id="proceedStep3">Continue to Heading Optimizer</button>
+        <button class="secondary" type="button" id="unfinalizeBtn">Change my selection</button>
+      </div>
+    </div>`);
+  document.getElementById('proceedStep3').addEventListener('click', () => goStep(3));
+  document.getElementById('unfinalizeBtn').addEventListener('click', () => {
+    const t = STATE.tiers;
+    renderDescriptionStage(document.getElementById('step2Result'),
+      [t.primary.main, ...(t.primary.variants||[])].filter(Boolean),
+      [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean));
+  });
+}
+
+
+// ============ STEP 3 ============
+function renderStep3() {
+  const el = document.getElementById('step3');
+  if (!STATE.tiers) { el.innerHTML = `<div class="empty-note">Complete Step 1 first.</div>`; return; }
+  el.innerHTML = `
+    <div class="card">
+      <h2>Paste your rough heading structure</h2>
+      <div class="hint">Use # for H1, ## for H2, ### for H3 -- one per line. It doesn't need to be optimized yet, that's what this step does.</div>
+      <div class="row2">
+        <div class="field">
+          <label>Target word count</label>
+          <input type="number" id="wordCountInput" value="${STATE.wordCount}" step="100">
+        </div>
+      </div>
+      <div class="field">
+        <label>Heading structure</label>
+        <textarea id="headingsInput" rows="12" placeholder="# Main headline\n## First section\n### Sub point\n## Second section">${STATE.headings}</textarea>
+      </div>
+      <button id="optimizeBtn">Optimize heading structure</button>
+      <div id="step3Result"></div>
+    </div>
+  `;
+  document.getElementById('optimizeBtn').addEventListener('click', optimizeHeadings);
+}
+
+function computeBudget(wordCount) {
+  const extra500s = Math.max(0, Math.floor((wordCount - 500) / 500));
+  return {
+    primary: 2 + extra500s,
+    secondary: 1 + extra500s,
+    tertiary: wordCount >= 1000 ? 1 : 0
+  };
+}
+
+async function optimizeHeadings() {
+  STATE.headings = document.getElementById('headingsInput').value;
+  STATE.wordCount = parseInt(document.getElementById('wordCountInput').value, 10) || 500;
+  const resultEl = document.getElementById('step3Result');
+  const budget = computeBudget(STATE.wordCount);
+
+  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Matching keyword variants to the right headings...</div>`;
+
+  const prompt = buildHeadingOptimizePrompt(budget, null);
+  await runHeadingOptimizePrompt(prompt, resultEl, budget);
+}
+
+function buildHeadingOptimizePrompt(budget, extraInstruction) {
+  const t = STATE.tiers;
+  const usedInMeta = STATE.meta ? `\n\nAlready used in the meta title: "${STATE.meta.title}"\nAlready used in the meta description: "${STATE.meta.description}"\nDo not repeat those exact same phrases again here unless the budget below explicitly calls for a repeat with a different variant.` : '';
+  const allVariants = [
+    ...[t.primary.main, ...(t.primary.variants||[])].filter(Boolean),
+    ...[t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean),
+    ...[t.tertiary.main, ...(t.tertiary.variants||[])].filter(Boolean)
+  ];
+  return `You are optimizing a heading structure for on-page keyword placement.
+
+Primary keyword and variants: ${[t.primary.main, ...(t.primary.variants||[])].join(' | ')}
+Secondary keyword and variants: ${[t.secondary.main, ...(t.secondary.variants||[])].join(' | ')}
+Tertiary keyword and variants: ${[t.tertiary.main, ...(t.tertiary.variants||[])].join(' | ')}
+${usedInMeta}
+
+Body usage budget for this page (do not exceed): Primary ${budget.primary}x in body, Secondary ${budget.secondary}x in body, Tertiary ${budget.tertiary}x in body (in addition to its one required H3).
+
+RULES:
+- The H1 must get a Primary variant not otherwise reserved for the title/meta.
+- Exactly one H2 gets the Secondary keyword.
+- Exactly one H3 gets the Tertiary keyword (pick the H3 whose topic is closest to what that keyword is actually about).
+- Distribute the remaining Primary/Secondary body budget across headings whose actual topic makes sense for a natural mention -- do not force it onto an unrelated heading.
+- If there are fewer distinct Primary or Secondary variants than the body budget calls for, it is fine and expected to reuse the same variant more than once across different headings -- just make sure each use gets its own distinct instruction/sentence context, never the literal identical sentence repeated twice.
+- Every "keyword_used" value must be copied EXACTLY, character for character, from this exact list of valid phrases -- never invent, reword, or slightly alter a phrase: ${allVariants.join(' | ')}
+- The "text" field for every heading must be copied EXACTLY, character for character, from the heading structure given below -- never reword, correct, shorten, or rephrase the heading itself. Your only job with headings is deciding which keyword goes where, never changing the heading wording.
+${extraInstruction ? `\nUSER CORRECTION TO APPLY -- this overrides your previous attempt where relevant, but keep following all the rules above for anything not addressed by this correction:\n${extraInstruction}\n` : ''}
+
+Heading structure:
+${STATE.headings}
+
+Return ONLY valid JSON, an array in the same order as the input headings. "keyword_used" must be null if no keyword is assigned to that heading, or must be one of the exact phrases listed above -- nothing else:
+[{"level": "H1", "text": "...", "keyword_used": "exact phrase or null", "instruction": "one short sentence telling the writer how to use it naturally"}]`;
+}
+
+function parseHeadingLines(rawHeadings) {
+  return rawHeadings.split('\n').map(l => l.trim()).filter(Boolean)
+    .map(line => {
+      if (line.startsWith('### ')) return { level: 'H3', text: line.slice(4).trim() };
+      if (line.startsWith('## ')) return { level: 'H2', text: line.slice(3).trim() };
+      if (line.startsWith('# ')) return { level: 'H1', text: line.slice(2).trim() };
+      return null;
+    }).filter(Boolean);
+}
+
+async function runHeadingOptimizePrompt(prompt, resultEl, budget) {
+  const sample = await getSample();
+  try {
+    let result = await sample.json(prompt, { modelTier: "default" });
+    // Defensive: handle the model wrapping the array in an object despite instructions
+    if (!Array.isArray(result)) {
+      result = result.headings || result.result || result.items || Object.values(result).find(v => Array.isArray(v)) || [];
+    }
+
+    // Hard guarantee: your original heading text can never come back changed,
+    // no matter what the model returns. Parse your original input in the same
+    // order and restore it by position if anything doesn't match exactly.
+    const originalHeadings = parseHeadingLines(STATE.headings);
+    let textMismatchCount = 0;
+    let countMismatch = false;
+    if (originalHeadings.length === result.length) {
+      result = result.map((h, i) => {
+        if (h.text !== originalHeadings[i].text) textMismatchCount++;
+        return { ...h, level: originalHeadings[i].level, text: originalHeadings[i].text };
+      });
+    } else {
+      countMismatch = true;
+    }
+
+    const t = normalizeTiers(STATE.tiers);
+    const validPhrases = new Set([
+      ...[t.primary.main, ...(t.primary.variants||[])],
+      ...[t.secondary.main, ...(t.secondary.variants||[])],
+      ...[t.tertiary.main, ...(t.tertiary.variants||[])]
+    ].filter(Boolean).map(normalizeForMatch));
+    STATE.annotated = result.map(h => ({
+      ...h,
+      keyword_used: h.keyword_used && validPhrases.has(normalizeForMatch(h.keyword_used)) ? h.keyword_used : null,
+      _rawKeywordAttempt: h.keyword_used || null
+    }));
+    const rejectedCount = STATE.annotated.filter(h => h._rawKeywordAttempt && !h.keyword_used).length;
+    renderAnnotated(resultEl, budget);
+    if (rejectedCount > 0) {
+      resultEl.insertAdjacentHTML('afterbegin', `<div class="flag-box" style="border-color:var(--flag);margin-bottom:14px">
+        <div class="flag-title">${rejectedCount} heading assignment(s) rejected -- phrase didn't exactly match your keyword list</div>
+        This is why the tracker might look emptier than expected. The model attempted: ${STATE.annotated.filter(h => h._rawKeywordAttempt && !h.keyword_used).map(h => `"${h._rawKeywordAttempt}"`).join(', ')} -- none of these matched a stored variant exactly.
+      </div>`);
+    }
+    if (textMismatchCount > 0) {
+      resultEl.insertAdjacentHTML('afterbegin', `<div class="flag-box" style="border-color:var(--primary);margin-bottom:14px">
+        <div class="flag-title" style="color:var(--primary)">Restored ${textMismatchCount} heading(s) to your exact original wording</div>
+        The model tried to reword a heading -- your original text was put back automatically, only the keyword assignment came from the model.
+      </div>`);
+    }
+    if (countMismatch) {
+      resultEl.insertAdjacentHTML('afterbegin', `<div class="flag-box" style="border-color:var(--danger);margin-bottom:14px">
+        <div class="flag-title" style="color:var(--danger)">The model returned a different number of headings than you gave it (${result.length} vs your ${originalHeadings.length}) -- couldn't safely auto-restore your exact wording this time. Check the headings below carefully before copying, or click "Re-run" to try again.</div>
+      </div>`);
+    }
+  } catch (err) {
+    resultEl.innerHTML = `<p class="charcount over">Something went wrong (${err.code || err.message || 'error'}). Try again.</p>`;
+  }
+}
+
+async function refineHeadingsWithFeedback() {
+  const instruction = document.getElementById('headingFeedbackInput').value.trim();
+  if (!instruction) return;
+  const resultEl = document.getElementById('step3Result');
+  const budget = computeBudget(STATE.wordCount);
+  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Applying your correction and re-checking against the rules...</div>`;
+  const currentState = STATE.annotated.map(h => `${h.level}: "${h.text}" -- currently assigned: ${h.keyword_used || 'nothing'}`).join('\n');
+  const prompt = buildHeadingOptimizePrompt(budget, `Current assignments:\n${currentState}\n\nYour instruction: ${instruction}`);
+  await runHeadingOptimizePrompt(prompt, resultEl, budget);
+}
+
+function buildCopyableStructure() {
+  return STATE.annotated.map(h => {
+    const prefix = h.level === 'H1' ? '#' : h.level === 'H2' ? '##' : h.level === 'H3' ? '###' : '';
+    let block = `${prefix} ${h.text}`;
+    if (h.keyword_used) block += `\n[KEYWORD NOTE: use "${h.keyword_used}" naturally in this section -- ${h.instruction || ''}]`;
+    return block;
+  }).join('\n\n');
+}
+
+function renderAnnotated(resultEl, budget) {
+  const copyText = buildCopyableStructure();
+  let html = `<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-top:20px">
+    <div style="flex:2;min-width:320px">
+      <div class="budget-strip">
+        <div class="budget-pill"><div class="n">${budget.primary}</div><div class="l">Primary uses in body</div></div>
+        <div class="budget-pill"><div class="n">${budget.secondary}</div><div class="l">Secondary uses in body</div></div>
+        <div class="budget-pill"><div class="n">${budget.tertiary}</div><div class="l">Tertiary uses (past H3)</div></div>
+      </div>`;
+
+  STATE.annotated.forEach(h => {
+    html += `<div class="heading-row">
+      <span class="htag">${h.level}</span><span class="htext">${h.text}</span>
+      ${h.keyword_used ? `<div class="instruction">Use <span class="kw">${h.keyword_used}</span> -- ${h.instruction || 'naturally in this section'}</div>` : ''}
+    </div>`;
+  });
+
+  html += `
+      <div class="card" style="margin-top:16px;background:var(--bg)">
+        <label>Not happy with an assignment? Describe the change</label>
+        <div class="hint" style="margin:4px 0 8px">e.g. "move the tertiary keyword off the pricing heading, it belongs on the FAQ about location" or "the third heading shouldn't get a secondary mention, it doesn't fit"</div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="headingFeedbackInput" placeholder="Describe what should change">
+          <button id="applyHeadingFeedback">Apply</button>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <label>Copy this back into your document</label>
+        <textarea id="copyableOutput" rows="14" readonly class="mono" style="margin-top:6px">${copyText}</textarea>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button id="copyStructureBtn">Copy to clipboard</button>
+          <button class="secondary" id="redoStep3">Re-run with a different word count</button>
+          <button id="proceedStep4">Continue to Content Audit</button>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:220px;position:sticky;top:20px">
+      <div class="card" style="padding:16px">
+        <div class="tier-label" style="color:var(--ink-soft);margin-bottom:10px">KEYWORD TRACKER</div>
+        <div id="keywordSidebar"></div>
+      </div>
+    </div>
+  </div>`;
+
+  resultEl.innerHTML = html;
+  renderKeywordSidebar();
+  document.getElementById('redoStep3').addEventListener('click', optimizeHeadings);
+  document.getElementById('proceedStep4').addEventListener('click', () => goStep(4));
+  document.getElementById('applyHeadingFeedback').addEventListener('click', refineHeadingsWithFeedback);
+  document.getElementById('copyStructureBtn').addEventListener('click', () => {
+    const ta = document.getElementById('copyableOutput');
+    ta.select();
+    navigator.clipboard.writeText(ta.value).then(() => {
+      const btn = document.getElementById('copyStructureBtn');
+      const original = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    }).catch(() => {
+      document.execCommand('copy');
+    });
+  });
+}
+
+// ============ STEP 4 ============
+function countWords(text) {
+  return (text.match(/\b[\w'-]+\b/g) || []).length;
+}
+
+function renderStep4() {
+  const el = document.getElementById('step4');
+  if (!STATE.tiers) { el.innerHTML = `<div class="empty-note">Complete Steps 1-3 first.</div>`; return; }
+  el.innerHTML = `
+    <div class="card">
+      <h2>Paste your finished content</h2>
+      <div class="hint">Paste the actual page copy you've written -- keep the # ## ### headings if you have them, it helps match sections. We'll check what got used, flag anything still open, and tell you if your real length unlocks room for more.</div>
+      <div class="field">
+        <textarea id="contentInput" rows="16" placeholder="Paste your finished article here, headings and all">${STATE.finishedContent || ''}</textarea>
+      </div>
+      <button id="auditBtn">Audit this content</button>
+      <div id="step4Result"></div>
+    </div>
+  `;
+  document.getElementById('auditBtn').addEventListener('click', auditContent);
+}
+
+async function auditContent() {
+  const content = document.getElementById('contentInput').value;
+  STATE.finishedContent = content;
+  const resultEl = document.getElementById('step4Result');
+  const wordCount = countWords(content);
+  const budget = computeBudget(wordCount);
+  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div>Checking your content against the plan (${wordCount} words found)...</div>`;
+
+  const t = STATE.tiers;
+  const allPrimary = [t.primary.main, ...(t.primary.variants||[])].filter(Boolean);
+  const allSecondary = [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean);
+  const allTertiary = [t.tertiary.main, ...(t.tertiary.variants||[])].filter(Boolean);
+
+  const primaryUsed = allPrimary.reduce((sum, p) => sum + countOccurrences(p, content), 0);
+  const secondaryUsed = allSecondary.reduce((sum, s) => sum + countOccurrences(s, content), 0);
+  const tertiaryUsed = allTertiary.reduce((sum, tt) => sum + countOccurrences(tt, content), 0);
+
+  const plannedChecks = [];
+  if (STATE.annotated) {
+    STATE.annotated.forEach(h => {
+      if (h.keyword_used) plannedChecks.push({ phrase: h.keyword_used, location: `${h.level}: "${h.text}"`, found: countOccurrences(h.keyword_used, content) > 0 });
+    });
+  }
+
+  const unusedPrimary = allPrimary.filter(p => countOccurrences(p, content) === 0);
+  const unusedSecondary = allSecondary.filter(s => countOccurrences(s, content) === 0);
+  const unusedTertiary = allTertiary.filter(tt => countOccurrences(tt, content) === 0);
+
+  const roomForMore = (primaryUsed < budget.primary && unusedPrimary.length) ||
+                       (secondaryUsed < budget.secondary && unusedSecondary.length) ||
+                       (budget.tertiary > 0 && tertiaryUsed < budget.tertiary + 1 && unusedTertiary.length);
+
+  let suggestions = [];
+  if (roomForMore && content.trim().length > 0) {
+    const sample = await getSample();
+    if (sample) {
+      const remaining = [];
+      if (primaryUsed < budget.primary) remaining.push(...unusedPrimary.map(p => `Primary: "${p}"`));
+      if (secondaryUsed < budget.secondary) remaining.push(...unusedSecondary.map(s => `Secondary: "${s}"`));
+      if (budget.tertiary > 0 && tertiaryUsed < budget.tertiary + 1) remaining.push(...unusedTertiary.map(tt => `Tertiary: "${tt}"`));
+
+      if (remaining.length) {
+        const prompt = `Here is finished page content (${wordCount} words):
+
+${content}
+
+Your original plan budgeted for more keyword mentions than have been used so far, because the real content came out longer than originally planned. These specific variants have not been used yet and there is room for them:
+${remaining.join('\n')}
+
+For each one, name which EXISTING section or heading in the content above could naturally absorb one more mention of that exact phrase, and write one example sentence showing how it would fit. Do not invent a new section. If none of them can fit anywhere naturally, say so honestly instead of forcing it.
+
+Return ONLY valid JSON: {"suggestions": [{"phrase": "...", "section": "...", "example_sentence": "..." or null if it truly doesn't fit}]}`;
+        try {
+          const result = await sample.json(prompt, { modelTier: "default" });
+          suggestions = result.suggestions || [];
+        } catch (err) { suggestions = []; }
+      }
+    }
+  }
+
+  renderAuditResult(resultEl, { wordCount, budget, primaryUsed, secondaryUsed, tertiaryUsed, plannedChecks, suggestions, allPrimary, allSecondary, allTertiary, content });
+}
+
+function renderAuditResult(resultEl, data) {
+  const { wordCount, budget, primaryUsed, secondaryUsed, tertiaryUsed, plannedChecks, suggestions, allPrimary, allSecondary, allTertiary, content } = data;
+
+  function fullTierList(label, colorHex, variants) {
+    let h = `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:600;color:${colorHex}">${label}</div>`;
+    variants.forEach(kw => {
+      const count = countOccurrences(kw, content);
+      const used = count > 0;
+      h += `<div style="font-family:'IBM Plex Mono',monospace;font-size:12px;padding:4px 0;">
+        <span style="${used ? 'text-decoration: line-through; text-decoration-thickness: 2px; color: var(--ink-soft);' : ''}">${kw}</span>
+        ${used ? `<span style="font-size:10px;opacity:0.85;padding-left:6px">— found ${count}x in your content</span>` : `<span style="font-size:10px;color:var(--flag);padding-left:6px">— not found</span>`}
+      </div>`;
+    });
+    return h + `</div>`;
+  }
+
+  let html = `<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-top:20px">
+    <div style="flex:2;min-width:320px">
+      <div class="budget-strip">
+        <div class="budget-pill"><div class="n">${wordCount}</div><div class="l">Words found</div></div>
+        <div class="budget-pill"><div class="n">${primaryUsed} / ${budget.primary}</div><div class="l">Primary used / budget</div></div>
+        <div class="budget-pill"><div class="n">${secondaryUsed} / ${budget.secondary}</div><div class="l">Secondary used / budget</div></div>
+      </div>`;
+
+  if (plannedChecks.length) {
+    html += `<div class="tier-block" style="margin-top:14px"><div class="tier-label" style="color:var(--ink-soft)">PLANNED HEADING ASSIGNMENTS -- DID YOU FOLLOW THROUGH?</div>`;
+    plannedChecks.forEach(c => {
+      html += `<div style="padding:5px 0;font-size:13px">
+        <span style="color:${c.found ? 'var(--primary)' : 'var(--danger)'};font-weight:600">${c.found ? '✓ Used' : '✗ Not found'}</span>
+        — <span class="mono" style="font-size:12px">${c.phrase}</span>
+        <span style="color:var(--ink-soft);font-size:12px"> planned for ${c.location}</span>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  if (suggestions.length) {
+    html += `<div class="flag-box" style="margin-top:14px"><div class="flag-title">YOUR CONTENT IS LONGER THAN PLANNED -- ROOM FOR MORE</div>
+      Based on the real word count, here's where remaining variants could still fit naturally:<br><br>`;
+    suggestions.forEach(s => {
+      html += `<div style="padding:8px 0;border-bottom:1px solid var(--line)">
+        <span class="mono" style="font-size:12.5px;font-weight:600">${s.phrase}</span>
+        ${s.example_sentence ? `<div style="font-size:12.5px;margin-top:4px"><b>Suggested section:</b> ${s.section}<br><b>Example:</b> "${s.example_sentence}"</div>`
+          : `<div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px">No natural fit found -- leave it out rather than forcing it.</div>`}
+      </div>`;
+    });
+    html += `</div>`;
+  } else {
+    html += `<div class="flag-box" style="border-color:var(--primary);margin-top:14px"><div class="flag-title" style="color:var(--primary)">NOTHING LEFT TO ADD</div>Every budgeted slot is used, or nothing left fits naturally at this length.</div>`;
+  }
+
+  html += `<div style="margin-top:14px"><button class="secondary" id="reAuditBtn">Re-audit (paste updated content above and re-run)</button></div>
+    </div>
+    <div style="flex:1;min-width:220px;position:sticky;top:20px">
+      <div class="card" style="padding:16px">
+        <div class="tier-label" style="color:var(--ink-soft);margin-bottom:10px">FULL KEYWORD TRACKER — this run</div>
+        ${fullTierList('PRIMARY', '#2F5D50', allPrimary)}
+        ${fullTierList('SECONDARY', '#3C4F78', allSecondary)}
+        ${allTertiary.length ? fullTierList('TERTIARY', '#8A4A2F', allTertiary) : ''}
+      </div>
+    </div>
+  </div>`;
+  resultEl.innerHTML = html;
+  document.getElementById('reAuditBtn').addEventListener('click', auditContent);
+}
+
+// init
+goStep(1);
+</script>
+</body>
+</html>
