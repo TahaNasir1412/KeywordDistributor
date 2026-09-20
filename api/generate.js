@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { prompt, json, tier } = req.body || {};
+  const { prompt, json, tier, maxTokens } = req.body || {};
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid "prompt" in request body' });
   }
@@ -37,9 +37,11 @@ export default async function handler(req, res) {
     : ['gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview'];
 
   const generationConfig = {
-    maxOutputTokens: 4096, // heading optimization returns one object per heading (level, text, keyword, instruction) --
-                            // a page with 8-12+ headings can genuinely need more than 2048 tokens, and a cut-off
-                            // response becomes invalid JSON, which is the most likely cause of a 500 here.
+    // The frontend can request more room for calls that genuinely need it (e.g.
+    // heading optimization scales this by how many headings were submitted --
+    // a fixed guess was truncating on longer pages). Capped at 16384 so a bad
+    // input can't cause a runaway-cost request.
+    maxOutputTokens: Math.min(16384, Math.max(4096, Number(maxTokens) || 4096)),
   };
   if (json) {
     generationConfig.responseMimeType = 'application/json';
