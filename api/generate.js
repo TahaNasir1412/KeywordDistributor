@@ -26,14 +26,14 @@ export default async function handler(req, res) {
 
   // Cost/token efficiency: always use a Flash-tier model, never a Pro-tier one --
   // this tool's tasks (keyword classification, short copy generation) don't need
-  // frontier reasoning, and Flash models are dramatically cheaper and faster.
-  // "quick" tasks (small judgment calls) get the lighter model; everything else
-  // gets the standard flash model. Check ai.google.dev/gemini-api/docs/models
-  // for the current model list and pricing before deploying, since availability
-  // and names can change -- swap the strings below if a model is retired.
-  const model = tier === 'quick' ? 'gemini-2.0-flash-lite' : 'gemini-2.0-flash';
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  // frontier reasoning. Google has been retiring model names fast (gemini-2.0-flash
+  // and gemini-2.0-flash-lite were both shut down June 1, 2026), so instead of one
+  // hardcoded name, we try a short list in order and use the first one that works.
+  // If everything below is dead by the time you read this, check
+  // ai.google.dev/gemini-api/docs/models for current names and update this list.
+  const modelCandidates = tier === 'quick'
+    ? ['gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite']
+    : ['gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
 
   const generationConfig = {
     maxOutputTokens: 2048, // caps runaway responses -- keeps cost predictable
@@ -42,39 +42,50 @@ export default async function handler(req, res) {
     generationConfig.responseMimeType = 'application/json';
   }
 
-  try {
-    const geminiRes = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig
-      })
-    });
+  let lastError = null;
+  for (const model of modelCandidates) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    try {
+      const geminiRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig
+        })
+      });
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      return res.status(geminiRes.status).json({ error: 'Gemini API error', detail: errText });
-    }
-
-    const data = await geminiRes.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (text === undefined) {
-      return res.status(500).json({ error: 'Gemini returned no usable content', raw: data });
-    }
-
-    if (json) {
-      try {
-        const parsed = JSON.parse(text);
-        return res.status(200).json(parsed);
-      } catch (parseErr) {
-        return res.status(500).json({ error: 'Gemini did not return valid JSON despite being asked to', raw: text });
+      if (!geminiRes.ok) {
+        lastError = { status: geminiRes.status, detail: await geminiRes.text(), model };
+        continue; // this model is unavailable/retired -- try the next one
       }
-    }
 
-    return res.status(200).json({ text });
-  } catch (err) {
-    return res.status(500).json({ error: 'Request to Gemini failed', detail: err.message });
+      const data = await geminiRes.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (text === undefined) {
+        lastError = { status: 500, detail: 'No usable content in response', model };
+        continue;
+      }
+
+      if (json) {
+        try {
+          const parsed = JSON.parse(text);
+          return res.status(200).json(parsed);
+        } catch (parseErr) {
+          return res.status(500).json({ error: 'Gemini did not return valid JSON despite being asked to', raw: text, modelUsed: model });
+        }
+      }
+
+      return res.status(200).json({ text });
+    } catch (err) {
+      lastError = { status: 500, detail: err.message, model };
+    }
   }
+
+  // Every candidate model failed -- all of them are likely retired or misconfigured.
+  return res.status(502).json({
+    error: 'All candidate Gemini models failed. They may have been retired -- check ai.google.dev/gemini-api/docs/models for current names and update modelCandidates in this file.',
+    lastError
+  });
 }
