@@ -1,0 +1,9 @@
+{
+  "name": "keyword-distribution-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local SEO keyword grouping, meta title/description, heading optimization, and content audit tool -- Gemini-powered backend on Vercel.",
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}
