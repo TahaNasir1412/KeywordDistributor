@@ -37,7 +37,9 @@ export default async function handler(req, res) {
     : ['gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview'];
 
   const generationConfig = {
-    maxOutputTokens: 2048, // caps runaway responses -- keeps cost predictable
+    maxOutputTokens: 4096, // heading optimization returns one object per heading (level, text, keyword, instruction) --
+                            // a page with 8-12+ headings can genuinely need more than 2048 tokens, and a cut-off
+                            // response becomes invalid JSON, which is the most likely cause of a 500 here.
   };
   if (json) {
     generationConfig.responseMimeType = 'application/json';
@@ -74,7 +76,14 @@ export default async function handler(req, res) {
           const parsed = JSON.parse(text);
           return res.status(200).json(parsed);
         } catch (parseErr) {
-          return res.status(500).json({ error: 'Gemini did not return valid JSON despite being asked to', raw: text, modelUsed: model });
+          const looksTruncated = !/[\]\}]\s*$/.test(text.trim());
+          return res.status(500).json({
+            error: looksTruncated
+              ? 'Gemini\'s response was cut off before finishing (likely too many headings/tokens for the output limit)'
+              : 'Gemini did not return valid JSON despite being asked to',
+            raw: text.slice(-300), // last part of the response, where truncation would show
+            modelUsed: model
+          });
         }
       }
 
