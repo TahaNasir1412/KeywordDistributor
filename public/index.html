@@ -346,7 +346,10 @@ ${batch.map(k => `${k.keyword}, ${k.volume}`).join('\n')}
 Return ONLY valid JSON: {"results": [{"keyword": "...", "verdict": "branded" or "generic", "confidence": "high" or "medium" or "low", "reason": "short reason"}]} -- one entry per keyword above, same order, same count.`;
 
     try {
-      const batchResult = await sample.json(prompt, { modelTier: "default" });
+      // Scale token budget to batch size -- a batch of 35 keywords, each needing
+      // its own verdict/confidence/reason, needs more room than a fixed guess.
+      const scaledMaxTokens = Math.max(4096, batch.length * 150 + 500);
+      const batchResult = await sample.json(prompt, { modelTier: "default", maxTokens: scaledMaxTokens });
       const batchList = batchResult.results || [];
       batch.forEach((item, idx) => {
         const r = batchList[idx] || { verdict: 'generic', confidence: 'low', reason: 'no response for this item -- left generic, please double check' };
@@ -688,13 +691,24 @@ async function applyFreeformEdit() {
   const sample = await getSample();
   const prompt = `Current keyword tiers:\n${formatTiersAsText(STATE.tiers)}\n\nUser instruction: "${instruction}"\n\nApply this instruction and return the updated tiers. Do not drop any keyword -- everything currently present must still appear somewhere (primary, secondary, tertiary, or related). Return ONLY valid JSON: {"primary":{"main":"...","variants":["..."]},"secondary":{"main":"...","variants":["..."]},"tertiary":{"main":"...","variants":["..."]},"related_pool":["..."]}`;
   try {
-    const result = await sample.json(prompt, { modelTier: "default" });
+    // This echoes back the ENTIRE tier structure -- primary/secondary/tertiary
+    // variants plus the whole related pool. For a large keyword list that's a
+    // lot of text to regenerate, so scale the budget to how many keywords
+    // actually exist right now instead of trusting a fixed guess.
+    const t = STATE.tiers;
+    const totalKeywordCount =
+      1 + (t.primary.variants||[]).length +
+      1 + (t.secondary.variants||[]).length +
+      1 + (t.tertiary.variants||[]).length +
+      (t.related_pool||[]).length;
+    const scaledMaxTokens = Math.max(4096, totalKeywordCount * 40 + 1000);
+    const result = await sample.json(prompt, { modelTier: "default", maxTokens: scaledMaxTokens });
     const inputList = parseKeywordInput(STATE.rawKeywords);
     STATE.tiers = normalizeTiers(result);
     STATE.missingKeywords = checkCompleteness(inputList, result);
     renderTierResults(resultEl);
   } catch (err) {
-    resultEl.innerHTML = `<p class="charcount over">Couldn't apply that (${err.code || 'error'}). Try the manual edit box instead.</p>`;
+    resultEl.innerHTML = `<p class="charcount over">Couldn't apply that (${err.code || err.message || 'error'}). Try the manual edit box instead.</p>`;
   }
 }
 
@@ -1632,7 +1646,10 @@ For each one, name which EXISTING section or heading in the content above could 
 
 Return ONLY valid JSON: {"suggestions": [{"phrase": "...", "section": "...", "example_sentence": "..." or null if it truly doesn't fit}]}`;
         try {
-          const result = await sample.json(prompt, { modelTier: "default" });
+          // Each suggestion needs a section name + a full example sentence --
+          // scale the budget to how many remaining variants there actually are.
+          const scaledMaxTokens = Math.max(4096, remaining.length * 150 + 1000);
+          const result = await sample.json(prompt, { modelTier: "default", maxTokens: scaledMaxTokens });
           suggestions = result.suggestions || [];
         } catch (err) { suggestions = []; }
       }
