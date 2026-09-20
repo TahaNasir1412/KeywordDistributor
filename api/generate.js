@@ -26,14 +26,15 @@ export default async function handler(req, res) {
 
   // Cost/token efficiency: always use a Flash-tier model, never a Pro-tier one --
   // this tool's tasks (keyword classification, short copy generation) don't need
-  // frontier reasoning. Google has been retiring model names fast (gemini-2.0-flash
-  // and gemini-2.0-flash-lite were both shut down June 1, 2026), so instead of one
-  // hardcoded name, we try a short list in order and use the first one that works.
-  // If everything below is dead by the time you read this, check
-  // ai.google.dev/gemini-api/docs/models for current names and update this list.
+  // frontier reasoning. IMPORTANT: Gemini 3.x models tagged "-preview" are paid-tier
+  // only as of 2026 -- a free AI Studio key (no billing enabled) will get an access
+  // error on those. So the order below tries confirmed free-tier-stable models
+  // FIRST, then newer GA models, and only falls back to preview models last (in
+  // case billing IS enabled on your project). If everything here is dead or wrong
+  // by the time you read this, check ai.google.dev/gemini-api/docs/models.
   const modelCandidates = tier === 'quick'
-    ? ['gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite']
-    : ['gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
+    ? ['gemini-2.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview']
+    : ['gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview'];
 
   const generationConfig = {
     maxOutputTokens: 2048, // caps runaway responses -- keeps cost predictable
