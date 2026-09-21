@@ -138,10 +138,12 @@
   .hl-primary { background: #C8E6D8; color: #1A4D3A; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
   .hl-secondary { background: #CBD9F0; color: #1F3866; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
   .hl-combined { background: #E3D2F5; color: #4A1F72; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
+  .hl-tertiary { background: #F3E7DF; color: #6B3A22; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
   .legend-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
   .legend-swatch.hl-primary { background: #4E9E77; }
   .legend-swatch.hl-secondary { background: #5B7BC4; }
   .legend-swatch.hl-combined { background: #9457C7; }
+  .legend-swatch.hl-tertiary { background: #8A4A2F; }
   .option-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; }
   .option-card:hover { border-color: var(--ink-soft); }
   .option-card.selected { border-color: var(--primary); border-width: 2px; }
@@ -820,12 +822,13 @@ function findMatches(text, phrases) {
   return spans;
 }
 
-function highlightKeywords(text, primaryPhrases, secondaryPhrases) {
+function highlightKeywords(text, primaryPhrases, secondaryPhrases, tertiaryPhrases) {
   const pSpans = findMatches(text, primaryPhrases).map(s => ({...s, tier: 'p'}));
   const sSpans = findMatches(text, secondaryPhrases).map(s => ({...s, tier: 's'}));
-  let all = [...pSpans, ...sSpans].sort((a,b) => a.start - b.start || (b.end-b.start) - (a.end-a.start));
+  const tSpans = findMatches(text, tertiaryPhrases || []).map(s => ({...s, tier: 't'}));
+  let all = [...pSpans, ...sSpans, ...tSpans].sort((a,b) => a.start - b.start || (b.end-b.start) - (a.end-a.start));
 
-  // merge overlapping spans; if a primary and secondary overlap, mark combined
+  // merge overlapping spans; if two different tiers overlap, mark combined
   const merged = [];
   all.forEach(span => {
     const last = merged[merged.length - 1];
@@ -838,7 +841,7 @@ function highlightKeywords(text, primaryPhrases, secondaryPhrases) {
   });
 
   let out = '', cursor = 0;
-  const colorClass = { p: 'hl-primary', s: 'hl-secondary', combined: 'hl-combined' };
+  const colorClass = { p: 'hl-primary', s: 'hl-secondary', t: 'hl-tertiary', combined: 'hl-combined' };
   merged.forEach(span => {
     out += escapeHtml(text.slice(cursor, span.start));
     out += `<mark class="${colorClass[span.tier]}">${escapeHtml(text.slice(span.start, span.end))}</mark>`;
@@ -877,9 +880,12 @@ async function generateTitles() {
 
 Primary keyword (use exactly, unmodified, pick whichever variant fits each option best): ${allPrimary.join(' | ')}
 Secondary keyword (use exactly, unmodified): ${allSecondary.join(' | ')}
-Context: ${STATE.niche}${competitorBlock}
+Context (the ICP and pain point this page must speak to): ${STATE.niche}${competitorBlock}
 
-RULES, IN PRIORITY ORDER:
+CREATIVE BRIEF -- this matters as much as the mechanical rules below, not less:
+A title that only satisfies the character limit and keyword placement but reads like a generic keyword string will lose clicks to a competitor that speaks to the searcher's actual problem. Each of the 3 options must reflect the strongest pain point or benefit from the Context above -- something that makes a person scanning search results feel "this one understands what I need," not just "this one repeats my search term." ${STATE.competitorText ? "Look at the competitor titles/descriptions given below and find a specific gap they leave open -- a promise, a proof point (speed, price transparency, availability), or an urgency angle they aren't using -- and use that gap as the differentiator, rather than just avoiding their exact wording." : ''}
+
+RULES, IN PRIORITY ORDER (these are hard mechanical constraints the creative brief above must work within, never override):
 1. NEVER exceed 60 characters. This is a hard ceiling, not a guideline -- going over is not allowed under any circumstance.
 2. Within that 60-character ceiling, try hard to include both a Primary variant AND a Secondary variant.
 3. If a Secondary variant already contains a Primary variant as a substring, use that Secondary phrase once -- it satisfies both requirements at once, costs fewer characters, and is the cleanest option when it's available. Always check for this before assuming they must be written separately.
@@ -1033,12 +1039,14 @@ async function generateDescriptions() {
 
 Primary keyword variants: ${allPrimary.join(' | ')}
 Secondary keyword variants: ${allSecondary.join(' | ')}
-Context: ${STATE.niche}
+Context (the ICP and pain point this page must speak to): ${STATE.niche}
 
-RULES:
+CREATIVE BRIEF -- the description's entire job is earning the click once the title has earned the look. A description that only places keywords correctly but reads as generic will lose the click to a competitor's result that speaks to the searcher's actual problem. Each option must: name or clearly imply the specific pain point from the Context above, give the searcher a real reason THIS result solves it (not a vague claim), and close with a genuine call to action -- not just a keyword-compliant sentence.
+
+RULES (mechanical constraints the brief above must work within, never override):
 - Do NOT reuse the exact primary variant "${usedPrimary}" that the title already used -- pick a different primary variant for the description.
 ${usedSecondary ? `- The title already used the secondary variant "${usedSecondary}" -- if you include secondary in the description, use a DIFFERENT secondary variant, not that same one.` : ''}
-- Each description 150 characters, never more, resolves the pain point(s) in the context, ends with a call to action.
+- Each description 150 characters, never more.
 - Try to naturally include a Secondary variant too if it fits without forcing it -- if it doesn't fit naturally, leave it out of that option.
 - Every keyword exact, word for word. No hedging words. Natural sentence flow.
 
@@ -1183,6 +1191,49 @@ function normalizeTiers(raw) {
     related_pool: (raw && raw.related_pool) || [],
     flags: (raw && raw.flags) || []
   };
+}
+
+// Exactly which variant has already been spent, per tier -- computed from what's
+// ACTUALLY locked in (finalized meta title/description + any headings already
+// assigned in a prior run), never guessed. This is what enforces the rule: never
+// repeat a variant that's already been used somewhere on the page; once every
+// variant in a tier has been used at least once, the newest assignment reuses
+// whichever already-used one reads most naturally, rather than inventing a
+// nonexistent phrase.
+function getUsedVariants() {
+  const t = STATE.tiers ? normalizeTiers(STATE.tiers) : null;
+  const used = { primary: new Set(), secondary: new Set(), tertiary: new Set() };
+  if (!t) return used;
+
+  const allByTier = {
+    primary: [t.primary.main, ...(t.primary.variants || [])].filter(Boolean),
+    secondary: [t.secondary.main, ...(t.secondary.variants || [])].filter(Boolean),
+    tertiary: [t.tertiary.main, ...(t.tertiary.variants || [])].filter(Boolean)
+  };
+
+  function markUsedIn(text) {
+    if (!text) return;
+    Object.keys(allByTier).forEach(tier => {
+      allByTier[tier].forEach(variant => {
+        if (keywordAppearsIn(variant, text)) used[tier].add(variant);
+      });
+    });
+  }
+
+  if (STATE.meta) {
+    markUsedIn(STATE.meta.title);
+    markUsedIn(STATE.meta.description);
+  }
+  if (STATE.annotated) {
+    STATE.annotated.forEach(h => {
+      if (!h.keyword_used) return;
+      Object.keys(allByTier).forEach(tier => {
+        if (allByTier[tier].includes(h.keyword_used)) used[tier].add(h.keyword_used);
+      });
+    });
+  }
+
+  return used;
 }
 
 function buildUsageMap() {
@@ -1387,27 +1438,41 @@ async function optimizeHeadings() {
 
 function buildHeadingOptimizePrompt(budget, extraInstruction) {
   const t = STATE.tiers;
-  const usedInMeta = STATE.meta ? `\n\nAlready used in the meta title: "${STATE.meta.title}"\nAlready used in the meta description: "${STATE.meta.description}"\nDo not repeat those exact same phrases again here unless the budget below explicitly calls for a repeat with a different variant.` : '';
   const allVariants = [
     ...[t.primary.main, ...(t.primary.variants||[])].filter(Boolean),
     ...[t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean),
     ...[t.tertiary.main, ...(t.tertiary.variants||[])].filter(Boolean)
   ];
+
+  // Explicit, computed pools -- never left for the AI to infer from prose. This
+  // is what enforces "don't reuse a variant already spent on the title/description/
+  // an earlier heading" as a real rule rather than a hint.
+  const used = getUsedVariants();
+  function poolBlock(label, tierKey) {
+    const all = [t[tierKey].main, ...(t[tierKey].variants || [])].filter(Boolean);
+    const usedList = all.filter(v => used[tierKey].has(v));
+    const unusedList = all.filter(v => !used[tierKey].has(v));
+    return `${label} -- ALREADY USED elsewhere on this page (in the title, description, or a heading from an earlier run) -- do NOT reuse these unless the unused pool below is genuinely empty: ${usedList.length ? usedList.join(' | ') : '(none used yet)'}
+${label} -- STILL UNUSED, draw from these FIRST for any new assignment: ${unusedList.length ? unusedList.join(' | ') : '(none left -- every variant has already been used at least once; when this happens, reuse whichever already-used variant above reads most naturally in the new sentence)'}`;
+  }
+
   return `You are optimizing a heading structure for on-page keyword placement.
 
-Primary keyword and variants: ${[t.primary.main, ...(t.primary.variants||[])].join(' | ')}
-Secondary keyword and variants: ${[t.secondary.main, ...(t.secondary.variants||[])].join(' | ')}
-Tertiary keyword and variants: ${[t.tertiary.main, ...(t.tertiary.variants||[])].join(' | ')}
-${usedInMeta}
+${poolBlock('PRIMARY', 'primary')}
 
-Body usage budget for this page (do not exceed): Primary ${budget.primary}x in body, Secondary ${budget.secondary}x in body, Tertiary ${budget.tertiary}x in body (in addition to its one required H3).
+${poolBlock('SECONDARY', 'secondary')}
+
+${poolBlock('TERTIARY', 'tertiary')}
+
+Body usage budget for this page (do not exceed, and do not fall short of, either): Primary ${budget.primary}x in body, Secondary ${budget.secondary}x in body, Tertiary ${budget.tertiary}x in body (in addition to its one required H3).
 
 RULES:
-- The H1 must get a Primary variant not otherwise reserved for the title/meta.
-- Exactly one H2 gets the Secondary keyword.
-- Exactly one H3 gets the Tertiary keyword (pick the H3 whose topic is closest to what that keyword is actually about).
-- Distribute the remaining Primary/Secondary body budget across headings whose actual topic makes sense for a natural mention -- do not force it onto an unrelated heading.
-- If there are fewer distinct Primary or Secondary variants than the body budget calls for, it is fine and expected to reuse the same variant more than once across different headings -- just make sure each use gets its own distinct instruction/sentence context, never the literal identical sentence repeated twice.
+- The H1 must get a Primary variant -- prefer an unused one from the pool above.
+- Exactly one H2 gets the Secondary keyword -- prefer an unused one.
+- Exactly one H3 gets the Tertiary keyword (pick the H3 whose topic is closest to what that keyword is actually about) -- prefer an unused one.
+- Distribute the remaining Primary/Secondary body budget across headings whose actual topic makes sense for a natural mention -- do not force it onto an unrelated heading. Always draw from the UNUSED pool for that tier first; only fall back to an already-used variant once the unused pool is genuinely exhausted.
+- The total number of headings assigned a given tier's keyword must match that tier's budget number exactly (the mandatory H1/H2/H3 assignments count toward this total) -- do not go over or stay under it.
+- If you do have to reuse an already-used variant, give that reuse a genuinely distinct sentence/instruction -- never the literal identical sentence repeated twice.
 - Every "keyword_used" value must be copied EXACTLY, character for character, from this exact list of valid phrases -- never invent, reword, or slightly alter a phrase: ${allVariants.join(' | ')}
 - The "text" field for every heading must be copied EXACTLY, character for character, from the heading structure given below -- never reword, correct, shorten, or rephrase the heading itself. Your only job with headings is deciding which keyword goes where, never changing the heading wording.
 ${extraInstruction ? `\nUSER CORRECTION TO APPLY -- this overrides your previous attempt where relevant, but keep following all the rules above for anything not addressed by this correction:\n${extraInstruction}\n` : ''}
@@ -1482,7 +1547,36 @@ async function runHeadingOptimizePrompt(prompt, resultEl, budget) {
       _rawKeywordAttempt: h.keyword_used || null
     }));
     const rejectedCount = STATE.annotated.filter(h => h._rawKeywordAttempt && !h.keyword_used).length;
+
+    // Verify the AI actually followed the stated budget count -- previously this
+    // was only ever requested in the prompt, never checked. Count real body
+    // assignments per tier (H1/H2/H3 mandatory slots don't count against the
+    // body budget) and flag any mismatch instead of silently trusting compliance.
+    const primaryVariantSet = new Set([t.primary.main, ...(t.primary.variants||[])].filter(Boolean).map(normalizeForMatch));
+    const secondaryVariantSet = new Set([t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean).map(normalizeForMatch));
+    const tertiaryVariantSet = new Set([t.tertiary.main, ...(t.tertiary.variants||[])].filter(Boolean).map(normalizeForMatch));
+    let primaryBodyCount = 0, secondaryBodyCount = 0, tertiaryBodyCount = 0;
+    STATE.annotated.forEach(h => {
+      if (!h.keyword_used) return;
+      const norm = normalizeForMatch(h.keyword_used);
+      const isMandatorySlot = (h.level === 'H1' && primaryVariantSet.has(norm)) ||
+                               false; // H2/H3 mandatory slots still count toward body budget per the original spec -- only H1's primary mention is separate from the body count
+      if (primaryVariantSet.has(norm) && h.level !== 'H1') primaryBodyCount++;
+      if (secondaryVariantSet.has(norm)) secondaryBodyCount++;
+      if (tertiaryVariantSet.has(norm) && h.level !== 'H3') tertiaryBodyCount++;
+    });
+    const budgetMismatches = [];
+    if (primaryBodyCount !== budget.primary) budgetMismatches.push(`Primary: got ${primaryBodyCount}, budget called for ${budget.primary}`);
+    if (secondaryBodyCount !== budget.secondary) budgetMismatches.push(`Secondary: got ${secondaryBodyCount}, budget called for ${budget.secondary}`);
+    if (budget.tertiary > 0 && tertiaryBodyCount > budget.tertiary) budgetMismatches.push(`Tertiary: got ${tertiaryBodyCount} in the body, budget only allowed ${budget.tertiary}`);
+
     renderAnnotated(resultEl, budget);
+    if (budgetMismatches.length > 0) {
+      resultEl.insertAdjacentHTML('afterbegin', `<div class="flag-box" style="border-color:var(--danger);margin-bottom:14px">
+        <div class="flag-title" style="color:var(--danger)">Budget count doesn't match what was requested</div>
+        ${budgetMismatches.join(' · ')} -- the AI didn't follow the stated density budget exactly. Review the assignments below, or use the correction box to ask it to fix the count.
+      </div>`);
+    }
     if (rejectedCount > 0) {
       resultEl.insertAdjacentHTML('afterbegin', `<div class="flag-box" style="border-color:var(--flag);margin-bottom:14px">
         <div class="flag-title">${rejectedCount} heading assignment(s) rejected -- phrase didn't exactly match your keyword list</div>
@@ -1527,7 +1621,19 @@ function buildCopyableStructure() {
 
 function renderAnnotated(resultEl, budget) {
   const copyText = buildCopyableStructure();
-  let html = `<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-top:20px">
+  const t = STATE.tiers;
+  const allPrimary = [t.primary.main, ...(t.primary.variants||[])].filter(Boolean);
+  const allSecondary = [t.secondary.main, ...(t.secondary.variants||[])].filter(Boolean);
+  const allTertiary = [t.tertiary.main, ...(t.tertiary.variants||[])].filter(Boolean);
+
+  let html = `
+    <div class="legend-box" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:16px 0;font-size:12.5px;color:var(--ink-soft)">
+      <span><span class="legend-swatch hl-primary"></span> Primary keyword</span>
+      <span><span class="legend-swatch hl-secondary"></span> Secondary keyword</span>
+      <span><span class="legend-swatch hl-tertiary"></span> Tertiary keyword</span>
+      <span><span class="legend-swatch hl-combined"></span> More than one at once</span>
+    </div>
+    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-top:20px">
     <div style="flex:2;min-width:320px">
       <div class="budget-strip">
         <div class="budget-pill"><div class="n">${budget.primary}</div><div class="l">Primary uses in body</div></div>
@@ -1537,7 +1643,7 @@ function renderAnnotated(resultEl, budget) {
 
   STATE.annotated.forEach(h => {
     html += `<div class="heading-row">
-      <span class="htag">${h.level}</span><span class="htext">${h.text}</span>
+      <span class="htag">${h.level}</span><span class="htext">${highlightKeywords(h.text, allPrimary, allSecondary, allTertiary)}</span>
       ${h.keyword_used ? `<div class="instruction">Use <span class="kw">${h.keyword_used}</span> -- ${h.instruction || 'naturally in this section'}</div>` : ''}
     </div>`;
   });
@@ -1610,6 +1716,22 @@ function renderStep4() {
   document.getElementById('auditBtn').addEventListener('click', auditContent);
 }
 
+// Density as a real percentage, matching the SOP formula: (occurrences x word-
+// count-of-that-phrase) / total-words x 100 -- summed across every variant in a
+// tier. This is what actually matters for the 0.3-0.4% ceiling, not a raw count,
+// since a raw "6 out of 4" number means nothing without knowing the page length
+// it's spread across.
+function calcTierDensity(variants, content, totalWords) {
+  if (!totalWords) return 0;
+  let weighted = 0;
+  variants.forEach(v => {
+    const occ = countOccurrences(v, content);
+    const wordsInPhrase = v.trim().split(/\s+/).length;
+    weighted += occ * wordsInPhrase;
+  });
+  return (weighted / totalWords) * 100;
+}
+
 async function auditContent() {
   const content = document.getElementById('contentInput').value;
   STATE.finishedContent = content;
@@ -1673,11 +1795,15 @@ Return ONLY valid JSON: {"suggestions": [{"phrase": "...", "section": "...", "ex
     }
   }
 
-  renderAuditResult(resultEl, { wordCount, budget, primaryUsed, secondaryUsed, tertiaryUsed, plannedChecks, suggestions, allPrimary, allSecondary, allTertiary, content });
+  const primaryDensity = calcTierDensity(allPrimary, content, wordCount);
+  const secondaryDensity = calcTierDensity(allSecondary, content, wordCount);
+  const tertiaryDensity = calcTierDensity(allTertiary, content, wordCount);
+
+  renderAuditResult(resultEl, { wordCount, budget, primaryUsed, secondaryUsed, tertiaryUsed, primaryDensity, secondaryDensity, tertiaryDensity, plannedChecks, suggestions, allPrimary, allSecondary, allTertiary, content });
 }
 
 function renderAuditResult(resultEl, data) {
-  const { wordCount, budget, primaryUsed, secondaryUsed, tertiaryUsed, plannedChecks, suggestions, allPrimary, allSecondary, allTertiary, content } = data;
+  const { wordCount, budget, primaryUsed, secondaryUsed, tertiaryUsed, primaryDensity, secondaryDensity, tertiaryDensity, plannedChecks, suggestions, allPrimary, allSecondary, allTertiary, content } = data;
 
   function fullTierList(label, colorHex, variants) {
     let h = `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:600;color:${colorHex}">${label}</div>`;
@@ -1694,10 +1820,25 @@ function renderAuditResult(resultEl, data) {
 
   let html = `<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-top:20px">
     <div style="flex:2;min-width:320px">
+      <div class="legend-box" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:12.5px;color:var(--ink-soft)">
+        <span><span class="legend-swatch hl-primary"></span> Primary keyword</span>
+        <span><span class="legend-swatch hl-secondary"></span> Secondary keyword</span>
+        <span><span class="legend-swatch hl-tertiary"></span> Tertiary keyword</span>
+      </div>
       <div class="budget-strip">
         <div class="budget-pill"><div class="n">${wordCount}</div><div class="l">Words found</div></div>
         <div class="budget-pill"><div class="n">${primaryUsed} / ${budget.primary}</div><div class="l">Primary used / budget</div></div>
         <div class="budget-pill"><div class="n">${secondaryUsed} / ${budget.secondary}</div><div class="l">Secondary used / budget</div></div>
+      </div>
+      <div class="budget-strip">
+        <div class="budget-pill"><div class="n" style="${primaryDensity > 0.4 ? 'color:var(--danger)' : ''}">${primaryDensity.toFixed(2)}%</div><div class="l">Primary density</div></div>
+        <div class="budget-pill"><div class="n" style="${secondaryDensity > 0.4 ? 'color:var(--danger)' : ''}">${secondaryDensity.toFixed(2)}%</div><div class="l">Secondary density</div></div>
+        <div class="budget-pill"><div class="n" style="${tertiaryDensity > 0.4 ? 'color:var(--danger)' : ''}">${tertiaryDensity.toFixed(2)}%</div><div class="l">Tertiary density</div></div>
+      </div>
+      <div class="hint" style="margin:6px 0 14px">Density recalculates from your real word count above, not the number you planned with -- ${wordCount} words, not whatever you originally typed into Step 3. Red means over the 0.4% ceiling.</div>
+      <div class="card" style="background:var(--bg);margin-bottom:14px">
+        <div class="tier-label" style="color:var(--ink-soft);margin-bottom:10px">YOUR CONTENT, WITH VERIFIED KEYWORD USES HIGHLIGHTED</div>
+        <div style="white-space:pre-wrap;font-size:13.5px;line-height:1.7;max-height:400px;overflow-y:auto">${highlightKeywords(content, allPrimary, allSecondary, allTertiary)}</div>
       </div>`;
 
   if (plannedChecks.length) {
