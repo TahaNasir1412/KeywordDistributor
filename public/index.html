@@ -1607,8 +1607,14 @@ async function refineHeadingsWithFeedback() {
 }
 
 function buildCopyableStructure() {
+  // Match the label style you actually typed (H1: / H2: / H3:) rather than
+  // always outputting markdown # / ## / ### -- so what you copy back looks
+  // like what you gave us, not a format you never used.
+  const usesLabelStyle = /^\s*H[123]\s*:/im.test(STATE.headings);
   return STATE.annotated.map(h => {
-    const prefix = h.level === 'H1' ? '#' : h.level === 'H2' ? '##' : h.level === 'H3' ? '###' : '';
+    const prefix = usesLabelStyle
+      ? `${h.level}:`
+      : (h.level === 'H1' ? '#' : h.level === 'H2' ? '##' : h.level === 'H3' ? '###' : '');
     let block = `${prefix} ${h.text}`;
     if (h.keyword_used) block += `\n[KEYWORD NOTE: use "${h.keyword_used}" naturally in this section -- ${h.instruction || ''}]`;
     return block;
