@@ -882,16 +882,13 @@ Primary keyword (use exactly, unmodified, pick whichever variant fits each optio
 Secondary keyword (use exactly, unmodified): ${allSecondary.join(' | ')}
 Context (the ICP and pain point this page must speak to): ${STATE.niche}${competitorBlock}
 
-CREATIVE BRIEF -- this matters as much as the mechanical rules below, not less:
-A title that only satisfies the character limit and keyword placement but reads like a generic keyword string will lose clicks to a competitor that speaks to the searcher's actual problem. Each of the 3 options must reflect the strongest pain point or benefit from the Context above -- something that makes a person scanning search results feel "this one understands what I need," not just "this one repeats my search term." ${STATE.competitorText ? "Look at the competitor titles/descriptions given below and find a specific gap they leave open -- a promise, a proof point (speed, price transparency, availability), or an urgency angle they aren't using -- and use that gap as the differentiator, rather than just avoiding their exact wording." : ''}
-
-RULES, IN PRIORITY ORDER (these are hard mechanical constraints the creative brief above must work within, never override):
-1. NEVER exceed 60 characters. This is a hard ceiling, not a guideline -- going over is not allowed under any circumstance.
-2. Within that 60-character ceiling, try hard to include both a Primary variant AND a Secondary variant.
-3. If a Secondary variant already contains a Primary variant as a substring, use that Secondary phrase once -- it satisfies both requirements at once, costs fewer characters, and is the cleanest option when it's available. Always check for this before assuming they must be written separately.
-4. If there is genuinely no way to fit both within 60 characters, keep the Primary variant (it is mandatory) and leave Secondary out of that specific option rather than exceeding the limit.
-5. Vary which exact Primary/Secondary variant each of the 3 options uses where natural, so they don't all read identically.
-6. Every keyword exact, word for word. No hedging words. Natural sentence flow.
+RULES, IN PRIORITY ORDER -- follow these exactly, in this order:
+1. NEVER exceed 60 characters. This is a hard ceiling, not a guideline -- going over is not allowed under any circumstance. Count the characters of each option before finalizing it.
+2. Check BOTH directions for containment before writing Primary and Secondary as two separate phrases: does a Secondary variant already contain a Primary variant as a substring, OR does a Primary variant already contain a Secondary variant as a substring? Either direction counts -- if either is true, use that one longer phrase alone. It satisfies both requirements at once, costs fewer characters, and is the cleanest option whenever it's available. Always check both directions explicitly before assuming they must be written separately.
+3. If there is genuinely no way to fit both within 60 characters even using the combine check above, keep the Primary variant (it is mandatory) and leave Secondary out of that specific option rather than exceeding the limit.
+4. Vary which exact Primary/Secondary variant each of the 3 options uses where natural, so they don't all read identically.
+5. Every keyword exact, word for word. No hedging words. Natural sentence flow.
+6. IMPORTANT -- do not stop at bare keywords: after satisfying rules 1-5, check how many characters remain unused out of the 60. If there is meaningful room left (roughly 10+ characters), that remaining room must be spent on something that reflects the strongest pain point or benefit from the Context above -- a real differentiator (e.g. "Same-Day", "Upfront Pricing", "Licensed", a real proof point), not padding. A title that only contains the two keywords and stops, when there was clearly room for more, is treated as incomplete -- a person scanning results should feel this title speaks to their specific problem, not just that it repeats their search term. ${STATE.competitorText ? "If competitor titles/descriptions are given below, find a specific gap they leave open and use that gap as the differentiator." : ""} This rule never overrides rules 1-5 -- it only fills room that is genuinely left over after they're satisfied.
 
 Return ONLY valid JSON: {"titles": ["...", "...", "..."]}`;
 
@@ -1041,14 +1038,13 @@ Primary keyword variants: ${allPrimary.join(' | ')}
 Secondary keyword variants: ${allSecondary.join(' | ')}
 Context (the ICP and pain point this page must speak to): ${STATE.niche}
 
-CREATIVE BRIEF -- the description's entire job is earning the click once the title has earned the look. A description that only places keywords correctly but reads as generic will lose the click to a competitor's result that speaks to the searcher's actual problem. Each option must: name or clearly imply the specific pain point from the Context above, give the searcher a real reason THIS result solves it (not a vague claim), and close with a genuine call to action -- not just a keyword-compliant sentence.
-
-RULES (mechanical constraints the brief above must work within, never override):
-- Do NOT reuse the exact primary variant "${usedPrimary}" that the title already used -- pick a different primary variant for the description.
-${usedSecondary ? `- The title already used the secondary variant "${usedSecondary}" -- if you include secondary in the description, use a DIFFERENT secondary variant, not that same one.` : ''}
-- Each description 150 characters, never more.
-- Try to naturally include a Secondary variant too if it fits without forcing it -- if it doesn't fit naturally, leave it out of that option.
-- Every keyword exact, word for word. No hedging words. Natural sentence flow.
+RULES, IN PRIORITY ORDER -- follow these exactly, in this order:
+1. NEVER exceed 150 characters. This is a hard ceiling, not a guideline -- going over is not allowed under any circumstance. Count the characters of each option before finalizing it; if it's over, cut words, don't round up.
+2. Do NOT reuse the exact primary variant "${usedPrimary}" that the title already used -- pick a different primary variant for the description.
+${usedSecondary ? `3. The title already used the secondary variant "${usedSecondary}" -- if you include secondary in the description, use a DIFFERENT secondary variant, not that same one.` : ''}
+4. Try to naturally include a Secondary variant too if it fits without forcing it -- if it doesn't fit naturally within the 150-character limit, leave it out of that option rather than exceeding the limit.
+5. Every keyword exact, word for word. No hedging words. Natural sentence flow.
+6. Within the 150-character limit, this is the description's whole job: earn the click the title has already earned the look for. A description that only places keywords correctly but reads as generic loses the click to a competitor that speaks to the searcher's actual problem. Each option must name or clearly imply the specific pain point from the Context above, give a real reason THIS result solves it, and close with a genuine call to action -- fitting this INSIDE the 150-character limit matters more than including every keyword variant possible. If a choice has to be made between fitting Secondary and fitting a real pain-point/CTA phrase, prioritize the pain-point/CTA phrase and drop Secondary for that option.
 
 Return ONLY valid JSON: {"descriptions": ["...", "...", "..."]}`;
 
