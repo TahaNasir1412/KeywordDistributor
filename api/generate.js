@@ -10,6 +10,22 @@
 //   GROQ_API_KEY   = your Groq key (fallback -- optional, but recommended)
 // Never put either key in this file or anywhere in the repo.
 
+// A stuck/slow individual call with no cap could silently eat this whole
+// function's entire runtime budget on ONE attempt, leaving zero time for the
+// other fallback models/providers -- and Vercel then kills the function
+// outright with its own generic 504, before this file's own error handling
+// ever gets a chance to run. This bounds any single attempt so the fallback
+// chain below can actually do its job within vercel.json's maxDuration.
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -38,6 +54,11 @@ export default async function handler(req, res) {
   // tasks don't need frontier reasoning. IMPORTANT: Gemini 3.x "-preview" models are
   // paid-tier only as of 2026 -- a free AI Studio key gets an access error on those.
   // Order tries confirmed free-tier-stable models first, GA models next, preview last.
+  // Each candidate gets 12s max (3 candidates = 36s worst case) before moving on,
+  // leaving room for the Groq fallback within vercel.json's maxDuration.
+  const GEMINI_ATTEMPT_TIMEOUT_MS = 12000;
+  const GROQ_ATTEMPT_TIMEOUT_MS = 12000;
+
   if (geminiKey) {
     const modelCandidates = tier === 'quick'
       ? ['gemini-2.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview']
@@ -49,11 +70,11 @@ export default async function handler(req, res) {
     for (const model of modelCandidates) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
       try {
-        const geminiRes = await fetch(url, {
+        const geminiRes = await fetchWithTimeout(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig })
-        });
+        }, GEMINI_ATTEMPT_TIMEOUT_MS);
 
         if (!geminiRes.ok) {
           attempts.push({ provider: 'gemini', model, status: geminiRes.status, detail: await geminiRes.text() });
@@ -84,7 +105,8 @@ export default async function handler(req, res) {
 
         return res.status(200).json({ text });
       } catch (err) {
-        attempts.push({ provider: 'gemini', model, status: 500, detail: err.message });
+        const timedOut = err.name === 'AbortError';
+        attempts.push({ provider: 'gemini', model, status: 500, detail: timedOut ? `timed out after ${GEMINI_ATTEMPT_TIMEOUT_MS}ms` : err.message });
       }
     }
   }
@@ -97,7 +119,7 @@ export default async function handler(req, res) {
   // the whole tool down with it.
   if (groqKey) {
     try {
-      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const groqRes = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
         body: JSON.stringify({
@@ -107,7 +129,7 @@ export default async function handler(req, res) {
           messages: [{ role: 'user', content: prompt }],
           ...(json ? { response_format: { type: 'json_object' } } : {})
         })
-      });
+      }, GROQ_ATTEMPT_TIMEOUT_MS);
 
       if (!groqRes.ok) {
         attempts.push({ provider: 'groq', model: 'openai/gpt-oss-120b', status: groqRes.status, detail: await groqRes.text() });
@@ -128,13 +150,14 @@ export default async function handler(req, res) {
         }
       }
     } catch (err) {
-      attempts.push({ provider: 'groq', status: 500, detail: err.message });
+      const timedOut = err.name === 'AbortError';
+      attempts.push({ provider: 'groq', status: 500, detail: timedOut ? `timed out after ${GROQ_ATTEMPT_TIMEOUT_MS}ms` : err.message });
     }
   }
 
   // Every provider and model failed -- return the full attempt log so the real
-  // cause (a dead model name, a bad key, a genuine outage) is visible immediately
-  // instead of a bare "500".
+  // cause (a dead model name, a bad key, a genuine outage, or a timeout) is
+  // visible immediately instead of a bare "500" or a generic platform "504".
   return res.status(502).json({
     error: 'All providers failed.' + (groqKey ? '' : ' GROQ_API_KEY is not set -- add it in Vercel for a fallback provider.'),
     attempts
