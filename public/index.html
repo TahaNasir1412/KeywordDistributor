@@ -960,7 +960,7 @@ function renderTitleStage(resultEl, allPrimary, allSecondary) {
       </div>
     </div>`;
   resultEl.innerHTML = html;
-  renderKeywordSidebar();
+  renderKeywordSidebar(resultEl);
   updateTitleStageActions();
 }
 
@@ -1090,7 +1090,7 @@ function renderDescriptionStage(resultEl, allPrimary, allSecondary) {
       </div>
     </div>`;
   resultEl.innerHTML = html;
-  renderKeywordSidebar();
+  renderKeywordSidebar(resultEl);
   updateDescStageActions();
 }
 
@@ -1220,11 +1220,17 @@ function buildUsageMap() {
   return usage;
 }
 
-function renderKeywordSidebar(containerId) {
-  containerId = containerId || 'keywordSidebar';
-  const sidebar = document.getElementById(containerId);
+function renderKeywordSidebar(scopeEl) {
+  // IMPORTANT: id="keywordSidebar" is reused across Step 2 and Step 3's HTML.
+  // document.getElementById always returns the FIRST match in the document,
+  // which can be a stale, hidden copy left over from an earlier step -- not
+  // the one actually visible on screen. Every caller already has its own
+  // resultEl (step2Result / step3Result / etc.) in scope, so search WITHIN
+  // that specific container instead of the whole document, guaranteeing this
+  // always updates the sidebar that's actually showing right now.
+  const sidebar = scopeEl ? scopeEl.querySelector('#keywordSidebar') : document.getElementById('keywordSidebar');
   if (!sidebar) {
-    console.warn('renderKeywordSidebar: container #' + containerId + ' not found in the DOM at render time.');
+    console.warn('renderKeywordSidebar: #keywordSidebar not found in the given scope at render time.');
     return;
   }
 
@@ -1416,9 +1422,20 @@ Return ONLY valid JSON, an array in the same order as the input headings. "keywo
 function parseHeadingLines(rawHeadings) {
   return rawHeadings.split('\n').map(l => l.trim()).filter(Boolean)
     .map(line => {
-      if (line.startsWith('### ')) return { level: 'H3', text: line.slice(4).trim() };
-      if (line.startsWith('## ')) return { level: 'H2', text: line.slice(3).trim() };
-      if (line.startsWith('# ')) return { level: 'H1', text: line.slice(2).trim() };
+      // Support BOTH input styles people actually type: markdown (# / ## / ###)
+      // and label style (H1: / H2: / H3:). A format the user actually used
+      // going unrecognized here silently returns an empty list, which then
+      // breaks both the token-budget scaling and the exact-wording restoration
+      // guarantee below -- so this must handle whichever style was pasted in.
+      let m = line.match(/^(#{1,3})\s+(.*)$/);
+      if (m) {
+        const level = m[1].length === 1 ? 'H1' : m[1].length === 2 ? 'H2' : 'H3';
+        return { level, text: m[2].trim() };
+      }
+      m = line.match(/^H([123])\s*:\s*(.*)$/i);
+      if (m) {
+        return { level: 'H' + m[1], text: m[2].trim() };
+      }
       return null;
     }).filter(Boolean);
 }
@@ -1553,7 +1570,7 @@ function renderAnnotated(resultEl, budget) {
   </div>`;
 
   resultEl.innerHTML = html;
-  renderKeywordSidebar();
+  renderKeywordSidebar(resultEl);
   document.getElementById('redoStep3').addEventListener('click', optimizeHeadings);
   document.getElementById('proceedStep4').addEventListener('click', () => goStep(4));
   document.getElementById('applyHeadingFeedback').addEventListener('click', refineHeadingsWithFeedback);
